@@ -29,7 +29,7 @@ public class Topology {
 		this.xSize = xSize;
 		this.ySize = ySize;
 		this.name = name;
-		linkedFields = new HashMap<Position, Position>();
+		linkedFields = new HashMap<>();
 	}
 
 	public final HashMap<Position, Position> getLinkedFields() {

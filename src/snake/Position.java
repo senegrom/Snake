@@ -3,12 +3,12 @@ package snake;
 import java.util.Random;
 
 /**
- * Class which represents a position on the gameboard.
+ * Class which represents a position on the game board.
  *
  * @author CGH
  */
 public class Position {
-	private final static int	defPos	= 0;
+	private final static int defPos = 0;
 
 	public final static Position randomPos(final int xmin, final int xmax, final int ymin, final int ymax) {
 		final Random rand = new Random();

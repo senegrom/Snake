@@ -20,7 +20,7 @@ public class Torus extends Topology {
 		final int y = p.getY();
 
 		while (x > xSize)
-			x -= (xSize + 1);
+			x -= xSize + 1;
 
 		return new Position(x, y);
 	}
@@ -31,7 +31,7 @@ public class Torus extends Topology {
 		final int y = p.getY();
 
 		while (x < 0)
-			x += (xSize + 1);
+			x += xSize + 1;
 
 		return new Position(x, y);
 	}
@@ -42,7 +42,7 @@ public class Torus extends Topology {
 		int y = p.getY();
 
 		while (y > ySize)
-			y -= (ySize + 1);
+			y -= ySize + 1;
 
 		return new Position(x, y);
 	}
@@ -53,7 +53,7 @@ public class Torus extends Topology {
 		int y = p.getY();
 
 		while (y < 0)
-			y += (ySize + 1);
+			y += ySize + 1;
 
 		return new Position(x, y);
 	}

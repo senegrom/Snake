@@ -1,7 +1,7 @@
 package snake;
 
 /**
- * Class which represents a direction on the gameboard.
+ * Class which represents a direction on the game board.
  *
  * @author CGH
  */
@@ -31,7 +31,7 @@ public class Direction {
 		return null;
 	}
 
-	private int	direction;
+	private int direction;
 
 	public Direction() {
 		this(minDir);

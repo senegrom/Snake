@@ -7,7 +7,7 @@ import snake.SnakeMoveThread;
 import topology.Topology;
 
 class SnakeFrameActionListener implements ActionListener {
-	private final SnakeFrame	sf;
+	private final SnakeFrame sf;
 
 	public SnakeFrameActionListener(final SnakeFrame sf) {
 		super();

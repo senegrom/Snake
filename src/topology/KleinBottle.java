@@ -20,7 +20,7 @@ public class KleinBottle extends Topology {
 		int y = p.getY();
 
 		while (x > xSize)
-			x -= (xSize + 1);
+			x -= xSize + 1;
 		y = ySize - y;
 
 		return new Position(x, y);
@@ -32,7 +32,7 @@ public class KleinBottle extends Topology {
 		int y = p.getY();
 
 		while (x < 0)
-			x += (xSize + 1);
+			x += xSize + 1;
 		y = ySize - y;
 
 		return new Position(x, y);
@@ -44,7 +44,7 @@ public class KleinBottle extends Topology {
 		int y = p.getY();
 
 		while (y > ySize)
-			y -= (ySize + 1);
+			y -= ySize + 1;
 		x = xSize - x;
 
 		return new Position(x, y);
@@ -56,7 +56,7 @@ public class KleinBottle extends Topology {
 		int y = p.getY();
 
 		while (y < 0)
-			y += (ySize + 1);
+			y += ySize + 1;
 		x = xSize - x;
 
 		return new Position(x, y);

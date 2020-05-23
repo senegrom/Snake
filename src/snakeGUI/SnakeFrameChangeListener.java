@@ -4,7 +4,7 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
 class SnakeFrameChangeListener implements ChangeListener {
-	private final SnakeFrame	sf;
+	private final SnakeFrame sf;
 
 	public SnakeFrameChangeListener(final SnakeFrame sf) {
 		super();

@@ -44,7 +44,7 @@ public class SnakeField extends JPanel {
 	private final static Topology	Z_DEF_Topology			= SnakeFrame.TOPOLOGY_PLANE(FIELD_WIDTH, FIELD_HEIGHT);
 
 	public final static Vector<Position> defStartPos() {
-		final Vector<Position> dSP = new Vector<Position>();
+		final Vector<Position> dSP = new Vector<>();
 		dSP.add(new Position(FIELD_WIDTH / 2, FIELD_HEIGHT / 2));
 		dSP.add(new Position(FIELD_WIDTH / 2 - 1, FIELD_HEIGHT / 2));
 		dSP.add(new Position(FIELD_WIDTH / 2 - 2, FIELD_HEIGHT / 2));

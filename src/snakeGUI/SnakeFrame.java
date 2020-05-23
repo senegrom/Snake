@@ -10,6 +10,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JSlider;
 import javax.swing.SwingConstants;
+import javax.swing.WindowConstants;
 import topology.KleinBottle;
 import topology.Plane;
 import topology.Topology;
@@ -93,11 +94,10 @@ class SnakeFrame {
 		lblSpeedDisp = new JLabel(ZeroPlaceHolder);
 		lblPoints = new JLabel(lblPointsText + ZeroPlaceHolder);
 		lblTimer = new JLabel(lblTimerText + ZeroPlaceHolder + timerSeperator + DblZeroPlaceHolder);
-		;
 
 		final int fieldWidth = SnakeField.FIELD_WIDTH;
 		final int fieldHeight = SnakeField.FIELD_HEIGHT;
-		cmbTopology = new JComboBox<Topology>();
+		cmbTopology = new JComboBox<>();
 		final Topology topPlane = TOPOLOGY_PLANE(fieldWidth, fieldHeight);
 		final Topology topTorus = TOPOLOGY_TORUS(fieldWidth, fieldHeight);
 		final Topology topKleinBtl = TOPOLOGY_KLEINBTL(fieldWidth, fieldHeight);
@@ -135,7 +135,7 @@ class SnakeFrame {
 		fieldPanel.setParentFrame(this);
 
 		myFrame.setResizable(false);
-		myFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		myFrame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 
 		final SnakeFrameActionListener snakeFrameAL = new SnakeFrameActionListener(this);
 		final SnakeFrameChangeListener snakeFrameCL = new SnakeFrameChangeListener(this);
@@ -150,8 +150,8 @@ class SnakeFrame {
 		myFrame.addKeyListener(new SnakeFrameKeyListener(getFieldPanel()));
 
 		myFrame.setVisible(true);
-		myFrame.setSize(frameWidth, 2 * topHeight + snakeHeight + myFrame.getInsets().top + myFrame.getInsets().bottom
-				+ snakeFrameSizeOffset);
+		myFrame.setSize(frameWidth,
+				2 * topHeight + snakeHeight + myFrame.getInsets().top + myFrame.getInsets().bottom + snakeFrameSizeOffset);
 		myFrame.setLocationRelativeTo(null);
 		lblSpeedDisp.setText(Integer.toString(sliSpeed.getValue()));
 	}
