@@ -1,8 +1,12 @@
 package snake;
 
 import java.awt.Color;
+import java.util.ArrayDeque;
+import java.util.Collection;
+import java.util.Deque;
+import java.util.HashSet;
 import java.util.Iterator;
-import java.util.Vector;
+import java.util.Set;
 
 /**
  * Class representing the snake as an object.
@@ -17,20 +21,25 @@ public class Snake {
 	private Color					color;
 
 	private Direction				direction;
-	private Vector<Position>		snakePos;
+	private Deque<Position>			snakePos;
+	private final Set<Position>		snakeSet	= new HashSet<>();
 
 	public Snake() {
 		this(defDir, null, defColor);
 	}
 
-	public Snake(final Direction direction, final Vector<Position> snakePos, final Color color) {
+	public Snake(final Direction direction, final Collection<Position> snakePos, final Color color) {
 		setDirection(direction);
 		setSnakePos(snakePos);
 		this.color = color;
 	}
 
-	public Snake(final Vector<Position> snakePos) {
+	public Snake(final Collection<Position> snakePos) {
 		this(defDir, snakePos, defColor);
+	}
+
+	public final boolean contains(final Position p) {
+		return snakeSet.contains(p);
 	}
 
 	public final void eat() {
@@ -42,7 +51,8 @@ public class Snake {
 	}
 
 	public final void eatTo(final Position P) {
-		snakePos.add(0, P);
+		snakePos.addFirst(P);
+		snakeSet.add(P);
 	}
 
 	public final Color getColor() {
@@ -58,23 +68,24 @@ public class Snake {
 	}
 
 	public final Position getHeadSnakePos() {
-		return snakePos.firstElement();
+		return (snakePos == null || snakePos.isEmpty()) ? null : snakePos.getFirst();
 	}
 
 	public final int getLength() {
-		return snakePos.size();
+		return snakePos == null ? 0 : snakePos.size();
 	}
 
 	public final Direction getRealDirection() {
-		return Direction.getDirectionFromPos(snakePos.get(0).subtract(snakePos.get(1)));
+		if (snakePos == null || snakePos.size() < 2)
+			return direction;
+		final Iterator<Position> it = snakePos.iterator();
+		final Position head = it.next();
+		final Position neck = it.next();
+		return Direction.getDirectionFromPos(head.subtract(neck));
 	}
 
-	public final Vector<Position> getSnakePos() {
+	public final Collection<Position> getSnakePos() {
 		return snakePos;
-	}
-
-	public final Position getSnakePos(final int i) {
-		return snakePos.elementAt(i);
 	}
 
 	public final void move() {
@@ -86,8 +97,10 @@ public class Snake {
 	}
 
 	public final void moveTo(final Position P) {
-		snakePos.add(0, P);
-		snakePos.remove(snakePos.size() - 1);
+		final Position tail = snakePos.removeLast();
+		snakeSet.remove(tail);
+		snakePos.addFirst(P);
+		snakeSet.add(P);
 	}
 
 	public final void setColor(final Color color) {
@@ -102,22 +115,26 @@ public class Snake {
 		direction = new Direction(d);
 	}
 
-	public final void setSnakePos(final Vector<Position> snakePos) {
-		this.snakePos = snakePos;
+	public final void setSnakePos(final Collection<Position> snakePos) {
+		this.snakeSet.clear();
+		if (snakePos == null) {
+			this.snakePos = null;
+			return;
+		}
+		this.snakePos = new ArrayDeque<>(snakePos);
+		this.snakeSet.addAll(snakePos);
 	}
 
 	@Override
 	public String toString() {
 		if (snakePos == null)
 			return "";
-		String s = "[ ";
-		final Iterator<Position> it = snakePos.iterator();
-		while (it.hasNext()) {
-			s += it.next().toString();
-			s += " ";
+		final StringBuilder sb = new StringBuilder("[ ");
+		for (final Position p : snakePos) {
+			sb.append(p.toString()).append(' ');
 		}
-		s += "]";
-		return s;
+		sb.append(']');
+		return sb.toString();
 	}
 
 }

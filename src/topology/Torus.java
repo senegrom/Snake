@@ -16,45 +16,21 @@ public class Torus extends Topology {
 
 	@Override
 	final protected Position xL(final Position p) {
-		int x = p.getX();
-		final int y = p.getY();
-
-		while (x > xSize)
-			x -= xSize + 1;
-
-		return new Position(x, y);
+		return new Position(Math.floorMod(p.getX(), xSize + 1), p.getY());
 	}
 
 	@Override
 	final protected Position xS(final Position p) {
-		int x = p.getX();
-		final int y = p.getY();
-
-		while (x < 0)
-			x += xSize + 1;
-
-		return new Position(x, y);
+		return new Position(Math.floorMod(p.getX(), xSize + 1), p.getY());
 	}
 
 	@Override
 	final protected Position yL(final Position p) {
-		final int x = p.getX();
-		int y = p.getY();
-
-		while (y > ySize)
-			y -= ySize + 1;
-
-		return new Position(x, y);
+		return new Position(p.getX(), Math.floorMod(p.getY(), ySize + 1));
 	}
 
 	@Override
 	final protected Position yS(final Position p) {
-		final int x = p.getX();
-		int y = p.getY();
-
-		while (y < 0)
-			y += ySize + 1;
-
-		return new Position(x, y);
+		return new Position(p.getX(), Math.floorMod(p.getY(), ySize + 1));
 	}
 }

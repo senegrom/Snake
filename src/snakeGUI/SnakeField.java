@@ -3,6 +3,7 @@ package snakeGUI;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.Vector;
 import javax.swing.JPanel;
@@ -82,7 +83,7 @@ public class SnakeField extends JPanel {
 		}
 	}
 
-	private final static Apple randomApple(final Vector<Position> exclude) {
+	private final static Apple randomApple(final Collection<Position> exclude) {
 		if (exclude == null)
 			return null;
 		Position p;
@@ -145,7 +146,7 @@ public class SnakeField extends JPanel {
 		Position headPos = snake.getHeadSnakePos().add(snake.getDirectionAsPos());
 
 		headPos = topology.getLinkFrom(headPos);
-		if (headPos == null || snake.getSnakePos().contains(headPos)) {
+		if (headPos == null || snake.contains(headPos)) {
 			setRunningState(RUNNING_STATE_NOT);
 			setEnabled(false);
 			repaint();

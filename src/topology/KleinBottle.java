@@ -16,49 +16,21 @@ public class KleinBottle extends Topology {
 
 	@Override
 	final protected Position xL(final Position p) {
-		int x = p.getX();
-		int y = p.getY();
-
-		while (x > xSize)
-			x -= xSize + 1;
-		y = ySize - y;
-
-		return new Position(x, y);
+		return new Position(Math.floorMod(p.getX(), xSize + 1), ySize - p.getY());
 	}
 
 	@Override
 	final protected Position xS(final Position p) {
-		int x = p.getX();
-		int y = p.getY();
-
-		while (x < 0)
-			x += xSize + 1;
-		y = ySize - y;
-
-		return new Position(x, y);
+		return new Position(Math.floorMod(p.getX(), xSize + 1), ySize - p.getY());
 	}
 
 	@Override
 	final protected Position yL(final Position p) {
-		int x = p.getX();
-		int y = p.getY();
-
-		while (y > ySize)
-			y -= ySize + 1;
-		x = xSize - x;
-
-		return new Position(x, y);
+		return new Position(xSize - p.getX(), Math.floorMod(p.getY(), ySize + 1));
 	}
 
 	@Override
 	final protected Position yS(final Position p) {
-		int x = p.getX();
-		int y = p.getY();
-
-		while (y < 0)
-			y += ySize + 1;
-		x = xSize - x;
-
-		return new Position(x, y);
+		return new Position(xSize - p.getX(), Math.floorMod(p.getY(), ySize + 1));
 	}
 }
