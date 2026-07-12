@@ -22,31 +22,29 @@ class SnakeFrameKeyListener implements KeyListener {
 
 	@Override
 	public void keyPressed(final KeyEvent e) {
-		try {
-			final int keycode = e.getKeyCode();
-			final int dir = snake.getRealDirection().getDirection();
-			switch (keycode) {
-			case keyRight:
-				if (dir != 2)
-					snake.setDirection(0);
-				break;
-			case keyDown:
-				if (dir != 3)
-					snake.setDirection(1);
-				break;
-			case keyLeft:
-				if (dir != 0)
-					snake.setDirection(2);
-				break;
-			case keyUp:
-				if (dir != 1)
-					snake.setDirection(3);
-				break;
-			case keyPause:
-				sf.switchPause();
-				break;
-			}
-		} catch (final NullPointerException ex) {}
+		final int keycode = e.getKeyCode();
+		final int dir = snake.getRealDirection().getDirection();
+		switch (keycode) {
+		case keyRight:
+			if (dir != 2)
+				snake.setDirection(0);
+			break;
+		case keyDown:
+			if (dir != 3)
+				snake.setDirection(1);
+			break;
+		case keyLeft:
+			if (dir != 0)
+				snake.setDirection(2);
+			break;
+		case keyUp:
+			if (dir != 1)
+				snake.setDirection(3);
+			break;
+		case keyPause:
+			sf.switchPause();
+			break;
+		}
 	}
 
 	@Override

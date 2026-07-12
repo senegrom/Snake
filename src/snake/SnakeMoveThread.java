@@ -1,5 +1,7 @@
 package snake;
 
+import java.lang.reflect.InvocationTargetException;
+import javax.swing.SwingUtilities;
 import snakeGUI.SnakeField;
 
 public class SnakeMoveThread extends Thread {
@@ -15,12 +17,18 @@ public class SnakeMoveThread extends Thread {
 	@Override
 	public void run() {
 		int rs;
-		while ((rs = fieldPanel.getRunningState()) > 0)
+		while ((rs = fieldPanel.getRunningState()) > 0) {
 			if (rs == 1) {
-				fieldPanel.move();
+				// Run the game step on the EDT: paint iterates the same snake deque
 				try {
-					sleep(fieldPanel.getMoveTime());
-				} catch (final InterruptedException e) {}
+					SwingUtilities.invokeAndWait(fieldPanel::move);
+				} catch (final InterruptedException e) {
+					Thread.currentThread().interrupt();
+					return;
+				} catch (final InvocationTargetException e) {
+					e.getCause().printStackTrace();
+					return;
+				}
 
 				// Set Time in the SnakeFrame
 				millis += fieldPanel.getMoveTime();
@@ -32,10 +40,15 @@ public class SnakeMoveThread extends Thread {
 					seconds -= 60;
 					minutes++;
 				}
-				fieldPanel.setTime(minutes, seconds);
-			} else if (rs == 2)
-				try {
-					sleep(fieldPanel.getMoveTime());
-				} catch (final InterruptedException e) {}
+				final int m = minutes, s = seconds;
+				SwingUtilities.invokeLater(() -> fieldPanel.setTime(m, s));
+			}
+			try {
+				sleep(fieldPanel.getMoveTime());
+			} catch (final InterruptedException e) {
+				Thread.currentThread().interrupt();
+				return;
+			}
+		}
 	}
 }

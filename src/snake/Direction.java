@@ -10,10 +10,6 @@ public class Direction {
 	public final static Position	A_DIRECTION_1	= new Position(0, 1);
 	public final static Position	A_DIRECTION_2	= new Position(-1, 0);
 	public final static Position	A_DIRECTION_3	= new Position(0, -1);
-	public final static Position	DIR_DOWN		= A_DIRECTION_1;
-	public final static Position	DIR_LEFT		= A_DIRECTION_2;
-	public final static Position	DIR_RIGHT		= A_DIRECTION_0;
-	public final static Position	DIR_UP			= A_DIRECTION_3;
 	private final static int		maxDir			= 3;
 	private final static int		minDir			= 0;
 
@@ -32,10 +28,6 @@ public class Direction {
 	}
 
 	private int direction;
-
-	public Direction() {
-		this(minDir);
-	}
 
 	public Direction(final int direction) {
 		if (direction >= minDir && direction <= maxDir)

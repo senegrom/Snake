@@ -8,33 +8,20 @@ import java.util.Random;
  * @author CGH
  */
 public class Position {
-	private final static int defPos = 0;
+	private final static Random rand = new Random();
 
 	public final static Position randomPos(final int xmin, final int xmax, final int ymin, final int ymax) {
-		final Random rand = new Random();
 		return new Position(xmin + rand.nextInt(xmax - xmin + 1), ymin + rand.nextInt(ymax - ymin + 1));
 	}
 
-	private int	x;
+	/** Immutable: positions are used as HashSet keys */
+	private final int	x;
 
-	private int	y;
-
-	public Position() {
-		this(defPos, defPos);
-	}
+	private final int	y;
 
 	public Position(final int x, final int y) {
 		this.x = x;
 		this.y = y;
-	}
-
-	/**
-	 * @param x
-	 * @param y
-	 * @return Adds the position (x,y) to the current position
-	 */
-	public final Position add(final int x, final int y) {
-		return add(new Position(x, y));
 	}
 
 	/**
@@ -76,23 +63,6 @@ public class Position {
 		result = prime * result + x;
 		result = prime * result + y;
 		return result;
-	}
-
-	public final Position scalarProd(final int d) {
-		return new Position(d * x, d * y);
-	}
-
-	public final void setPosition(final int x, final int y) {
-		this.x = x;
-		this.y = y;
-	}
-
-	public final void setX(final int x) {
-		this.x = x;
-	}
-
-	public final void setY(final int y) {
-		this.y = y;
 	}
 
 	public final Position subtract(final Position P) {

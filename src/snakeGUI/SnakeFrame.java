@@ -12,6 +12,7 @@ import javax.swing.JSlider;
 import javax.swing.SwingConstants;
 import javax.swing.WindowConstants;
 import topology.KleinBottle;
+import topology.ProjectivePlane;
 import topology.Plane;
 import topology.Topology;
 import topology.Torus;
@@ -49,6 +50,10 @@ class SnakeFrame {
 
 	public final static Topology TOPOLOGY_PLANE(final int fieldWidth, final int fieldHeight) {
 		return new Plane(fieldWidth, fieldHeight, "Plane");
+	}
+
+	public final static Topology TOPOLOGY_PROJPLANE(final int fieldWidth, final int fieldHeight) {
+		return new ProjectivePlane(fieldWidth, fieldHeight, "Projective Plane");
 	}
 
 	public final static Topology TOPOLOGY_TORUS(final int fieldWidth, final int fieldHeight) {
@@ -98,12 +103,10 @@ class SnakeFrame {
 		final int fieldWidth = SnakeField.FIELD_WIDTH;
 		final int fieldHeight = SnakeField.FIELD_HEIGHT;
 		cmbTopology = new JComboBox<>();
-		final Topology topPlane = TOPOLOGY_PLANE(fieldWidth, fieldHeight);
-		final Topology topTorus = TOPOLOGY_TORUS(fieldWidth, fieldHeight);
-		final Topology topKleinBtl = TOPOLOGY_KLEINBTL(fieldWidth, fieldHeight);
-		cmbTopology.addItem(topPlane);
-		cmbTopology.addItem(topTorus);
-		cmbTopology.addItem(topKleinBtl);
+		cmbTopology.addItem(TOPOLOGY_PLANE(fieldWidth, fieldHeight));
+		cmbTopology.addItem(TOPOLOGY_TORUS(fieldWidth, fieldHeight));
+		cmbTopology.addItem(TOPOLOGY_KLEINBTL(fieldWidth, fieldHeight));
+		cmbTopology.addItem(TOPOLOGY_PROJPLANE(fieldWidth, fieldHeight));
 
 		topPanel.setLayout(new GridLayout(1, 0));
 		topPanel2.setLayout(new FlowLayout());
@@ -206,14 +209,6 @@ class SnakeFrame {
 
 	public final JSlider getSliSpeed() {
 		return sliSpeed;
-	}
-
-	public final JPanel getTopPanel() {
-		return topPanel;
-	}
-
-	public final JPanel getTopPanel2() {
-		return topPanel2;
 	}
 
 	public final void requestFocus() {

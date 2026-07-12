@@ -8,6 +8,7 @@ import java.util.Iterator;
 import java.util.Vector;
 import javax.swing.JPanel;
 import snake.Apple;
+import snake.Direction;
 import snake.Position;
 import snake.Snake;
 import topology.Topology;
@@ -93,19 +94,16 @@ public class SnakeField extends JPanel {
 		return new Apple(p);
 	}
 
-	private Apple		apple;
-	private int			moveTime;
-	private SnakeFrame	parentFrame;
-	private int			runningState	= RUNNING_STATE_NOT;
-	private Snake		snake;
-	private Topology	topology;
+	private Apple			apple;
+	/** Volatile: written from the EDT, read by the SnakeMoveThread */
+	private volatile int	moveTime;
+	private SnakeFrame		parentFrame;
+	private volatile int	runningState	= RUNNING_STATE_NOT;
+	private Snake			snake;
+	private Topology		topology;
 
 	public SnakeField() {
-		this(new Snake(defStartPos()), randomApple(defStartPos()));
-	}
-
-	public SnakeField(final Snake snake) {
-		this(snake, randomApple(snake.getSnakePos()));
+		this(new Snake(new Direction(0), defStartPos(), Color.BLUE), randomApple(defStartPos()));
 	}
 
 	public SnakeField(final Snake snake, final Apple apple) {
@@ -124,10 +122,6 @@ public class SnakeField extends JPanel {
 
 	public final int getMoveTime() {
 		return moveTime;
-	}
-
-	public final SnakeFrame getParentFrame() {
-		return parentFrame;
 	}
 
 	public final int getRunningState() {
@@ -184,10 +178,6 @@ public class SnakeField extends JPanel {
 
 	public final void setRunningState(final int runningState) {
 		this.runningState = runningState;
-	}
-
-	public final void setSnake(final Snake snake) {
-		this.snake = snake;
 	}
 
 	public final void setTime(final int min, final int sec) {

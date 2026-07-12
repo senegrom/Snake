@@ -16,17 +16,11 @@ import java.util.Set;
 
 public class Snake {
 
-	private final static Color		defColor	= Color.BLUE;
-	private final static Direction	defDir		= new Direction(0);
-	private Color					color;
+	private Color				color;
 
-	private Direction				direction;
-	private Deque<Position>			snakePos;
-	private final Set<Position>		snakeSet	= new HashSet<>();
-
-	public Snake() {
-		this(defDir, null, defColor);
-	}
+	private Direction			direction;
+	private Deque<Position>		snakePos;
+	private final Set<Position>	snakeSet	= new HashSet<>();
 
 	public Snake(final Direction direction, final Collection<Position> snakePos, final Color color) {
 		setDirection(direction);
@@ -34,20 +28,8 @@ public class Snake {
 		this.color = color;
 	}
 
-	public Snake(final Collection<Position> snakePos) {
-		this(defDir, snakePos, defColor);
-	}
-
 	public final boolean contains(final Position p) {
 		return snakeSet.contains(p);
-	}
-
-	public final void eat() {
-		eatTo(getHeadSnakePos().add(getDirectionAsPos()));
-	}
-
-	public final void eatTo(final int x, final int y) {
-		eatTo(new Position(x, y));
 	}
 
 	public final void eatTo(final Position P) {
@@ -57,10 +39,6 @@ public class Snake {
 
 	public final Color getColor() {
 		return color;
-	}
-
-	public final Direction getDirection() {
-		return direction;
 	}
 
 	public final Position getDirectionAsPos() {
@@ -81,19 +59,14 @@ public class Snake {
 		final Iterator<Position> it = snakePos.iterator();
 		final Position head = it.next();
 		final Position neck = it.next();
-		return Direction.getDirectionFromPos(head.subtract(neck));
+		// After a wrap move head-neck is not a unit vector; fall back to the
+		// commanded direction instead of returning null
+		final Direction d = Direction.getDirectionFromPos(head.subtract(neck));
+		return d != null ? d : direction;
 	}
 
 	public final Collection<Position> getSnakePos() {
 		return snakePos;
-	}
-
-	public final void move() {
-		moveTo(getHeadSnakePos().add(getDirectionAsPos()));
-	}
-
-	public final void moveTo(final int x, final int y) {
-		moveTo(new Position(x, y));
 	}
 
 	public final void moveTo(final Position P) {
@@ -101,10 +74,6 @@ public class Snake {
 		snakeSet.remove(tail);
 		snakePos.addFirst(P);
 		snakeSet.add(P);
-	}
-
-	public final void setColor(final Color color) {
-		this.color = color;
 	}
 
 	public final void setDirection(final Direction direction) {
@@ -123,18 +92,6 @@ public class Snake {
 		}
 		this.snakePos = new ArrayDeque<>(snakePos);
 		this.snakeSet.addAll(snakePos);
-	}
-
-	@Override
-	public String toString() {
-		if (snakePos == null)
-			return "";
-		final StringBuilder sb = new StringBuilder("[ ");
-		for (final Position p : snakePos) {
-			sb.append(p.toString()).append(' ');
-		}
-		sb.append(']');
-		return sb.toString();
 	}
 
 }

@@ -11,7 +11,6 @@ import snake.Position;
 public class Torus extends Topology {
 	public Torus(final int xSize, final int ySize, final String name) {
 		super(xSize, ySize, name);
-		linkedFields = null;
 	}
 
 	@Override

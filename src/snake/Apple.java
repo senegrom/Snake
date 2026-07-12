@@ -13,11 +13,7 @@ public class Apple {
 	private final static Color	defColor	= Color.RED;
 	private Position			applePos;
 
-	private Color				color;
-
-	public Apple() {
-		this(null, defColor);
-	}
+	private final Color			color;
 
 	public Apple(final Position applePos) {
 		this(applePos, defColor);
@@ -38,17 +34,6 @@ public class Apple {
 
 	public final void setApplePos(final Position applePos) {
 		this.applePos = applePos;
-	}
-
-	public final void setColor(final Color color) {
-		this.color = color;
-	}
-
-	@Override
-	public String toString() {
-		if (applePos == null)
-			return "";
-		return "[ " + applePos.toString() + " ]";
 	}
 
 }
