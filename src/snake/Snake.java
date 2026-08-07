@@ -3,6 +3,7 @@ package snake;
 import java.awt.Color;
 import java.util.ArrayDeque;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -60,13 +61,28 @@ public class Snake {
 		final Position head = it.next();
 		final Position neck = it.next();
 		// After a wrap move head-neck is not a unit vector; fall back to the
-		// commanded direction instead of returning null
+		// commanded direction instead of returning null.
 		final Direction d = Direction.getDirectionFromPos(head.subtract(neck));
 		return d != null ? d : direction;
 	}
 
 	public final Collection<Position> getSnakePos() {
-		return snakePos;
+		return snakePos == null ? null : Collections.unmodifiableCollection(snakePos);
+	}
+
+	public final Position getTailSnakePos() {
+		return (snakePos == null || snakePos.isEmpty()) ? null : snakePos.getLast();
+	}
+
+	/**
+	 * Returns whether moving the head to {@code p} would collide with the body.
+	 * When the snake is not growing, its current tail leaves the board in the
+	 * same tick and is therefore a legal destination.
+	 */
+	public final boolean wouldCollideAt(final Position p, final boolean growing) {
+		if (!snakeSet.contains(p))
+			return false;
+		return growing || !p.equals(getTailSnakePos());
 	}
 
 	public final void moveTo(final Position P) {
