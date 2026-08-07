@@ -3,9 +3,11 @@ package snakeGUI;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
-import java.util.Vector;
+import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 import javax.swing.JPanel;
 import snake.Apple;
 import snake.Direction;
@@ -34,6 +36,7 @@ public class SnakeField extends JPanel {
 	private final static Font		gameOverFont			= new Font("Verdana", Font.BOLD, 40);
 	private final static int		gameOverLeftOffset		= 120;
 	private final static String		gameOverText			= "Game Over";
+	private final static String		gameWonText				= "You Win";
 	/** Size of one Snaxel in Pixels */
 	public final static int			ITEM_SIZE				= 10;
 	public final static int			MAX_SPEED				= BETWEEN_MOVE_TIMES.length;
@@ -45,8 +48,8 @@ public class SnakeField extends JPanel {
 	private final static int		startLen				= defStartPos().size();
 	private final static Topology	Z_DEF_Topology			= SnakeFrame.TOPOLOGY_PLANE(FIELD_WIDTH, FIELD_HEIGHT);
 
-	public final static Vector<Position> defStartPos() {
-		final Vector<Position> dSP = new Vector<>();
+	public final static List<Position> defStartPos() {
+		final List<Position> dSP = new ArrayList<>();
 		dSP.add(new Position(FIELD_WIDTH / 2, FIELD_HEIGHT / 2));
 		dSP.add(new Position(FIELD_WIDTH / 2 - 1, FIELD_HEIGHT / 2));
 		dSP.add(new Position(FIELD_WIDTH / 2 - 2, FIELD_HEIGHT / 2));
@@ -84,17 +87,30 @@ public class SnakeField extends JPanel {
 		}
 	}
 
+	/**
+	 * Picks uniformly from all currently free cells. This stays bounded even
+	 * when the board is almost full, unlike rejection sampling.
+	 */
 	private final static Apple randomApple(final Collection<Position> exclude) {
 		if (exclude == null)
 			return null;
-		Position p;
-		do
-			p = Position.randomPos(0, FIELD_WIDTH, 0, FIELD_HEIGHT);
-		while (exclude.contains(p));
-		return new Apple(p);
+		Position selected = null;
+		int freeCount = 0;
+		for (int x = 0; x <= FIELD_WIDTH; x++) {
+			for (int y = 0; y <= FIELD_HEIGHT; y++) {
+				final Position candidate = new Position(x, y);
+				if (exclude.contains(candidate))
+					continue;
+				freeCount++;
+				if (ThreadLocalRandom.current().nextInt(freeCount) == 0)
+					selected = candidate;
+			}
+		}
+		return selected == null ? null : new Apple(selected);
 	}
 
 	private Apple			apple;
+	private boolean			gameWon;
 	/** Volatile: written from the EDT, read by the SnakeMoveThread */
 	private volatile int	moveTime;
 	private SnakeFrame		parentFrame;
@@ -108,10 +124,10 @@ public class SnakeField extends JPanel {
 
 	public SnakeField(final Snake snake, final Apple apple) {
 		if (snake == null || apple == null)
-			return;
+			throw new IllegalArgumentException("snake and apple must not be null");
 		this.snake = snake;
 		this.apple = apple;
-		runningState = 0;
+		runningState = RUNNING_STATE_NOT;
 		topology = Z_DEF_Topology;
 
 		setBackground(background);
@@ -136,20 +152,32 @@ public class SnakeField extends JPanel {
 		return topology;
 	}
 
+	public final boolean isGameWon() {
+		return gameWon;
+	}
+
 	public void move() {
 		Position headPos = snake.getHeadSnakePos().add(snake.getDirectionAsPos());
 
 		headPos = topology.getLinkFrom(headPos);
-		if (headPos == null || snake.contains(headPos)) {
+		final boolean eating = headPos != null && apple != null && headPos.equals(apple.getApplePos());
+		if (headPos == null || snake.wouldCollideAt(headPos, eating)) {
+			gameWon = false;
 			setRunningState(RUNNING_STATE_NOT);
 			setEnabled(false);
-			repaint();
-		} else if (headPos.equals(apple.getApplePos())) {
+		} else if (eating) {
 			snake.eatTo(headPos);
 			apple = randomApple(snake.getSnakePos());
-		} else
+			if (apple == null) {
+				gameWon = true;
+				setRunningState(RUNNING_STATE_NOT);
+				setEnabled(false);
+			}
+		} else {
 			snake.moveTo(headPos);
-		parentFrame.setPoints(snake.getLength() - startLen);
+		}
+		if (parentFrame != null)
+			parentFrame.setPoints(snake.getLength() - startLen);
 
 		repaint();
 	}
@@ -164,7 +192,7 @@ public class SnakeField extends JPanel {
 		if (!isEnabled()) {
 			g.setFont(gameOverFont);
 			g.setColor(gameOverColor);
-			g.drawString(gameOverText, getWidth() / 2 - gameOverLeftOffset, getHeight() / 2);
+			g.drawString(gameWon ? gameWonText : gameOverText, getWidth() / 2 - gameOverLeftOffset, getHeight() / 2);
 		}
 	}
 
@@ -181,7 +209,8 @@ public class SnakeField extends JPanel {
 	}
 
 	public final void setTime(final int min, final int sec) {
-		parentFrame.setTime(min, sec);
+		if (parentFrame != null)
+			parentFrame.setTime(min, sec);
 	}
 
 	public final void setTopology(final Topology topology) {
