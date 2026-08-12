@@ -1,0 +1,317 @@
+package snake.gui;
+
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.Random;
+import java.util.concurrent.atomic.AtomicLong;
+import javax.swing.JComponent;
+import javax.swing.RepaintManager;
+import javax.swing.SwingUtilities;
+import snake.Direction;
+import snake.Position;
+import snake.Snake;
+import snake.topology.Topology;
+
+/** Targeted model, timing and headless-rendering smoke tests. */
+public final class SnakeSmokeTests {
+	private static int checks;
+
+	private SnakeSmokeTests() {
+	}
+
+	public static void main(final String[] args) throws Exception {
+		System.setProperty("java.awt.headless", "true");
+		SwingUtilities.invokeAndWait(SnakeSmokeTests::run);
+		System.out.println(checks + " smoke checks passed");
+	}
+
+	private static void run() {
+		testMovementInvariants();
+		testValidationBoundaries();
+		testAppleSelection();
+		testElapsedTime();
+		testFieldEventsAndRepainting();
+		testRendering();
+	}
+
+	private static void testMovementInvariants() {
+		final Snake moving = new Snake(Direction.RIGHT,
+				List.of(new Position(2, 0), new Position(1, 0), new Position(0, 0)));
+		check(moving.advanceTo(new Position(3, 0), false), "ordinary movement succeeds");
+		equal(List.of(new Position(3, 0), new Position(2, 0), new Position(1, 0)),
+				List.copyOf(moving.body()), "ordinary movement removes the tail");
+
+		final Snake growingIntoTail = new Snake(Direction.UP,
+				List.of(new Position(0, 1), new Position(1, 1),
+						new Position(1, 0), new Position(0, 0)));
+		final List<Position> beforeCollision = List.copyOf(growingIntoTail.body());
+		check(!growingIntoTail.advanceTo(growingIntoTail.body().getLast(), true),
+				"growing into the current tail is a collision");
+		equal(beforeCollision, List.copyOf(growingIntoTail.body()),
+				"a rejected tail-growth collision leaves the body unchanged");
+
+		final Snake turning = new Snake(Direction.RIGHT,
+				List.of(new Position(2, 0), new Position(1, 0), new Position(0, 0)));
+		check(turning.requestDirection(Direction.UP), "the first queued turn is accepted");
+		check(turning.requestDirection(Direction.DOWN),
+				"a queued turn may be revised before movement");
+		check(!turning.requestDirection(Direction.LEFT),
+				"a revision may not reverse the last completed step");
+		check(turning.requestDirection(Direction.RIGHT),
+				"returning to the current heading cancels the queued turn");
+	}
+
+	private static void testValidationBoundaries() {
+		final Snake snake = new Snake(Direction.RIGHT,
+				List.of(new Position(2, 0), new Position(1, 0), new Position(0, 0)));
+		expectIllegalArgument(() -> new SnakeField(snake,
+				new Position(SnakeField.BOARD_COLUMNS, 1)),
+				"apple at the exclusive right bound is rejected");
+		expectIllegalArgument(() -> new SnakeField(snake,
+				new Position(1, SnakeField.BOARD_ROWS)),
+				"apple at the exclusive bottom bound is rejected");
+		expectIllegalArgument(() -> Topology.TORUS.map(new Position(0, 0), 0, 1),
+				"zero-column boards are rejected before mapping");
+		expectIllegalArgument(() -> Topology.TORUS.map(new Position(0, 0), 1, 0),
+				"zero-row boards are rejected before mapping");
+		expectNullPointer(() -> new SnakeField(snake, new Position(10, 10), null),
+				"field rejects a null clock");
+	}
+
+	private static void testAppleSelection() {
+		final Snake snake = new Snake(Direction.RIGHT,
+				List.of(new Position(2, 0), new Position(1, 0), new Position(0, 0)));
+		final int freeCells = SnakeField.CELL_COUNT - snake.length();
+		final int selectedFreeCell = new Random(3).nextInt(freeCells);
+		equal(nthFreeCell(snake, selectedFreeCell), SnakeField.spawnApple(snake, new Random(3)),
+				"apple placement honours the supplied random selection");
+		expectNullPointer(() -> SnakeField.spawnApple(snake, null),
+				"apple placement rejects a null random source");
+	}
+
+	private static Position nthFreeCell(final Snake snake, final int selectedFreeCell) {
+		int remaining = selectedFreeCell;
+		for (int y = 0; y < SnakeField.BOARD_ROWS; y++)
+			for (int x = 0; x < SnakeField.BOARD_COLUMNS; x++) {
+				final Position candidate = new Position(x, y);
+				if (!snake.contains(candidate) && remaining-- == 0)
+					return candidate;
+			}
+		throw new AssertionError("selected free cell does not exist");
+	}
+
+	private static void testElapsedTime() {
+		final AtomicLong clock = new AtomicLong(1_000_000_000L);
+		final Snake snake = new Snake(Direction.RIGHT,
+				List.of(new Position(2, 0), new Position(1, 0), new Position(0, 0)));
+		final SnakeField field = new SnakeField(snake, new Position(10, 10), clock::get);
+		final EventRecorder events = new EventRecorder(field);
+		field.setMoveDelay(100_000);
+		field.startGame();
+		clock.addAndGet(3_400_000_000L);
+		check(field.pauseGame(), "running game pauses");
+		equal(3, field.elapsedSeconds(), "pause captures elapsed running time");
+		equal(3, events.time, "pause publishes elapsed seconds");
+		equal(1, events.timeChanges, "first displayed second is published once");
+
+		clock.addAndGet(50_000_000_000L);
+		equal(3, field.elapsedSeconds(), "paused time is excluded");
+		check(field.resumeGame(), "paused game resumes");
+		check(field.pauseGame(), "game can pause again without elapsed time");
+		equal(1, events.timeChanges, "unchanged elapsed seconds are not republished");
+		check(field.resumeGame(), "game resumes for a second running interval");
+		clock.addAndGet(2_200_000_000L);
+		check(field.pauseGame(), "second running interval can be paused");
+		equal(5, field.elapsedSeconds(), "resumed time continues from the paused total");
+		equal(5, events.time, "new elapsed second is published");
+		equal(2, events.timeChanges, "only changed elapsed seconds are published");
+		check(field.resumeGame(), "game resumes before shutdown");
+		clock.addAndGet(1_100_000_000L);
+		field.shutdown();
+		equal(6, field.elapsedSeconds(), "shutdown preserves the final running interval");
+
+		final AtomicLong endClock = new AtomicLong(10_000_000_000L);
+		final Snake wallSnake = new Snake(Direction.RIGHT,
+				List.of(new Position(SnakeField.BOARD_COLUMNS - 1, 2),
+						new Position(SnakeField.BOARD_COLUMNS - 2, 2)));
+		final SnakeField ending = new SnakeField(wallSnake, new Position(0, 0), endClock::get);
+		final EventRecorder endingEvents = new EventRecorder(ending);
+		ending.setMoveDelay(100_000);
+		ending.startGame();
+		endClock.addAndGet(2_500_000_000L);
+		ending.step();
+		equal(SnakeField.Status.FINISHED, ending.status(), "wall collision finishes a running game");
+		equal(2, ending.elapsedSeconds(), "game over preserves the final running interval");
+		equal(1, endingEvents.finished, "game over publishes one finished event");
+		equal(2, endingEvents.time, "game over publishes the final elapsed second");
+	}
+
+	private static void testFieldEventsAndRepainting() {
+		final Snake eatingSnake = new Snake(Direction.RIGHT,
+				List.of(new Position(2, 1), new Position(1, 1), new Position(0, 1)));
+		final SnakeField eating = new SnakeField(eatingSnake, new Position(3, 1));
+		final EventRecorder eatingEvents = new EventRecorder(eating);
+
+		final RepaintManager originalManager = RepaintManager.currentManager(eating);
+		final CountingRepaintManager repaintManager = new CountingRepaintManager();
+		RepaintManager.setCurrentManager(repaintManager);
+		try {
+			eating.step();
+		} finally {
+			RepaintManager.setCurrentManager(originalManager);
+		}
+		equal(1, eatingEvents.points, "eating publishes the updated score");
+		check(repaintManager.dirtyRegions > 0, "a completed step requests repainting");
+
+		final SnakeField stopped = new SnakeField(new Snake(Direction.RIGHT,
+				List.of(new Position(2, 4), new Position(1, 4), new Position(0, 4))),
+				new Position(10, 10));
+		stopped.shutdown();
+		final List<Position> stoppedBody = List.copyOf(stopped.snake().body());
+		stopped.step();
+		equal(stoppedBody, List.copyOf(stopped.snake().body()),
+				"steps after shutdown do not mutate the snake");
+	}
+
+	private static void testRendering() {
+		final Snake snake = new Snake(Direction.RIGHT,
+				List.of(new Position(2, 1), new Position(1, 1), new Position(0, 1)));
+		final SnakeField field = new SnakeField(snake, new Position(3, 1));
+		final BufferedImage image = render(field);
+		final int cellSize = (image.getWidth() - 2) / SnakeField.BOARD_COLUMNS;
+
+		equal(Color.BLACK.getRGB(), image.getRGB(0, 0), "board border paints black");
+		equal(Color.WHITE.getRGB(), image.getRGB(5 * cellSize + 5, 5 * cellSize + 5),
+				"empty board cells paint white");
+		equal(Color.BLUE.getRGB(), image.getRGB(2 * cellSize + 5, cellSize + 5),
+				"snake cells paint blue");
+		equal(Color.RED.getRGB(), image.getRGB(3 * cellSize + 5, cellSize + 5),
+				"apple paints red");
+
+		final Snake wallSnake = new Snake(Direction.RIGHT,
+				List.of(new Position(SnakeField.BOARD_COLUMNS - 1, 2),
+						new Position(SnakeField.BOARD_COLUMNS - 2, 2)));
+		final SnakeField finished = new SnakeField(wallSnake, new Position(0, 0));
+		finished.step();
+		final BufferedImage endImage = render(finished);
+		check(finished.status() == SnakeField.Status.FINISHED,
+				"terminal field renders without changing state");
+		equal("Game Over", finished.endMessage(), "loss selects the game-over text");
+		equal(Color.RED, finished.endMessageColor(), "loss selects the red end color");
+		check(containsColor(endImage, Color.RED, endImage.getWidth() / 4, endImage.getHeight() / 3,
+				endImage.getWidth() * 3 / 4, endImage.getHeight() * 2 / 3),
+				"game-over overlay paints red in the board centre");
+
+		final Position winningApple = new Position(0, 0);
+		final Snake winningSnake = new Snake(Direction.LEFT,
+				almostFullBody(new Position(1, 0), winningApple));
+		final SnakeField winning = new SnakeField(winningSnake, winningApple);
+		winning.step();
+		equal("You Win!", winning.endMessage(), "win selects the winning text");
+		final Color winColor = new Color(0, 128, 0);
+		equal(winColor, winning.endMessageColor(), "win selects the green end color");
+		final BufferedImage winImage = render(winning);
+		check(containsColor(winImage, winColor, winImage.getWidth() / 4, winImage.getHeight() / 3,
+				winImage.getWidth() * 3 / 4, winImage.getHeight() * 2 / 3),
+				"winning overlay paints green in the board centre");
+	}
+
+	private static final class EventRecorder {
+		private int finished;
+		private int points = -1;
+		private int time = -1;
+		private int timeChanges;
+
+		EventRecorder(final SnakeField field) {
+			field.addPropertyChangeListener(SnakeField.POINTS_PROPERTY,
+					event -> points = (Integer) event.getNewValue());
+			field.addPropertyChangeListener(SnakeField.TIME_PROPERTY, event -> {
+				time = (Integer) event.getNewValue();
+				timeChanges++;
+			});
+			field.addPropertyChangeListener(SnakeField.FINISHED_PROPERTY, event -> finished++);
+		}
+	}
+
+	private static final class CountingRepaintManager extends RepaintManager {
+		private int dirtyRegions;
+
+		@Override
+		public void addDirtyRegion(final JComponent component, final int x, final int y,
+				final int width, final int height) {
+			if (component instanceof SnakeField)
+				dirtyRegions++;
+			super.addDirtyRegion(component, x, y, width, height);
+		}
+	}
+
+	private static List<Position> almostFullBody(final Position head, final Position freeCell) {
+		final List<Position> body = new ArrayList<>(SnakeField.CELL_COUNT - 1);
+		body.add(head);
+		for (int y = 0; y < SnakeField.BOARD_ROWS; y++)
+			for (int x = 0; x < SnakeField.BOARD_COLUMNS; x++) {
+				final Position position = new Position(x, y);
+				if (!position.equals(head) && !position.equals(freeCell))
+					body.add(position);
+			}
+		return body;
+	}
+
+	private static BufferedImage render(final SnakeField field) {
+		final Dimension size = field.getPreferredSize();
+		field.setSize(size);
+		final BufferedImage image = new BufferedImage(size.width, size.height,
+				BufferedImage.TYPE_INT_ARGB);
+		final Graphics2D graphics = image.createGraphics();
+		try {
+			field.paint(graphics);
+		} finally {
+			graphics.dispose();
+		}
+		return image;
+	}
+
+	private static boolean containsColor(final BufferedImage image, final Color color,
+			final int minX, final int minY, final int maxX, final int maxY) {
+		final int rgb = color.getRGB();
+		for (int y = minY; y < maxY; y++)
+			for (int x = minX; x < maxX; x++)
+				if (image.getRGB(x, y) == rgb)
+					return true;
+		return false;
+	}
+
+	private static void expectNullPointer(final Runnable action, final String message) {
+		try {
+			action.run();
+			throw new AssertionError(message + " (nothing was thrown)");
+		} catch (final NullPointerException expected) {
+			checks++;
+		}
+	}
+
+	private static void expectIllegalArgument(final Runnable action, final String message) {
+		try {
+			action.run();
+			throw new AssertionError(message + " (nothing was thrown)");
+		} catch (final IllegalArgumentException expected) {
+			checks++;
+		}
+	}
+
+	private static void equal(final Object expected, final Object actual, final String message) {
+		check(Objects.equals(expected, actual),
+				message + " (expected " + expected + ", got " + actual + ")");
+	}
+
+	private static void check(final boolean condition, final String message) {
+		if (!condition)
+			throw new AssertionError(message);
+		checks++;
+	}
+}

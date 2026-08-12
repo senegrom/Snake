@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Java 25
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Set up Java 25
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version-file: .java-version
+
+      - name: Check whitespace
+        run: git diff --check HEAD^
+
+      - name: Compile with all warnings enabled
+        shell: bash
+        run: |
+          mkdir -p out
+          mapfile -d '' sources < <(find src test -name '*.java' -print0 | sort -z)
+          javac --release 25 -encoding UTF-8 -Xlint:all -Werror -d out "${sources[@]}"
+
+      - name: Run headless regression tests
+        run: |
+          java -ea -Djava.awt.headless=true -cp out snake.gui.SnakeTests
+          java -ea -Djava.awt.headless=true -cp out snake.gui.SnakeSmokeTests
+
+      - name: Run GUI smoke tests
+        run: xvfb-run -a java -ea -Djava.awt.headless=false -cp out snake.gui.SnakeGuiTests

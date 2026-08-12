@@ -1,0 +1,12 @@
+/bin/
+/out/
+*.class
+
+# IDE and OS metadata
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# JVM crash logs
+hs_err_pid*
