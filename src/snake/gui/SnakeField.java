@@ -315,6 +315,8 @@ final class SnakeField extends JPanel {
 	}
 
 	private static void validateBoardState(final Snake snake, final Position apple) {
+		if (snake.length() >= CELL_COUNT)
+			throw new IllegalArgumentException("A playable board must contain at least one free cell");
 		for (final Position position : snake.body())
 			if (!isInsideBoard(position))
 				throw new IllegalArgumentException("Snake position is outside the board: " + position);

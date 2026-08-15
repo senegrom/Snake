@@ -13,7 +13,7 @@ public enum Direction {
 	}
 
 	public Position move(final Position position) {
-		return new Position(position.x() + deltaX, position.y() + deltaY);
+		return position.translate(deltaX, deltaY);
 	}
 
 	Direction opposite() {

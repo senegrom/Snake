@@ -29,6 +29,9 @@ import snake.topology.Topology;
 
 /** Main application window and entry point. */
 public final class SnakeFrame {
+	private static final String VERSION = "0.3.0";
+	private static final String ABOUT_TEXT = "Snake " + VERSION + " by CGH.";
+
 	private final JButton aboutButton = new JButton("About");
 	private final JButton exitButton = new JButton("Exit");
 	private final SnakeField field = new SnakeField();
@@ -169,7 +172,7 @@ public final class SnakeFrame {
 
 	private void showAbout() {
 		final boolean resumeAfterDialog = field.pauseGame();
-		showMessage("Snake by CGH.", "About", JOptionPane.INFORMATION_MESSAGE);
+		showMessage(ABOUT_TEXT, "About", JOptionPane.INFORMATION_MESSAGE);
 		if (resumeAfterDialog)
 			field.resumeGame();
 	}
