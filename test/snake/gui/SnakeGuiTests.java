@@ -12,10 +12,12 @@ import javax.swing.Action;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JSlider;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import snake.Direction;
+import snake.topology.Topology;
 
 /** End-to-end smoke tests for the real Swing window under a virtual display. */
 public final class SnakeGuiTests {
@@ -56,6 +58,12 @@ public final class SnakeGuiTests {
 		check(topology.isEnabled(), "topology begins editable");
 		equal(SnakeField.Status.READY, field.status(), "field begins ready");
 
+		// Settings chosen before the game must survive the in-place restart below
+		speed.setValue(3);
+		topology.setSelectedItem(Topology.CYLINDER);
+		equal(SnakeField.MOVE_DELAYS_MS.get(2), field.moveDelay(), "speed slider applies its delay");
+		equal(Topology.CYLINDER, field.topology(), "topology box applies its selection");
+
 		start.doClick(0);
 		check(!start.isEnabled(), "starting disables the start button");
 		check(pause.isEnabled(), "starting enables pause");
@@ -83,16 +91,26 @@ public final class SnakeGuiTests {
 		equal("Pause", pause.getText(), "finish event resets the pause-button label");
 
 		restart.doClick(0);
-		check(!originalFrame.isDisplayable(), "restart disposes the old window");
-		final JFrame restartedFrame = visibleSnakeFrame();
-		check(restartedFrame != originalFrame, "restart creates a new window");
-		final SnakeField restartedField = component(restartedFrame, SnakeField.class, ignored -> true);
+		check(originalFrame.isDisplayable() && originalFrame.isVisible(), "restart keeps the window open");
+		check(visibleSnakeFrame() == originalFrame, "restart does not open a second window");
+		final SnakeField restartedField = component(originalFrame, SnakeField.class, ignored -> true);
+		check(restartedField != field, "restart installs a fresh field");
+		equal(SnakeField.Status.FINISHED, field.status(), "restart shuts the old field down");
 		equal(SnakeField.Status.READY, restartedField.status(), "restarted field is ready");
-		check(button(restartedFrame, "Start").isEnabled(), "restarted window can start");
-		check(!button(restartedFrame, "Pause").isEnabled(), "restarted pause button is disabled");
+		check(start.isEnabled(), "restarted window can start");
+		check(!pause.isEnabled(), "restarted pause button is disabled");
+		check(speed.isEnabled() && topology.isEnabled(), "restart unlocks the settings");
+		equal(SnakeField.MOVE_DELAYS_MS.get(2), restartedField.moveDelay(), "restart keeps the chosen speed");
+		equal(Topology.CYLINDER, restartedField.topology(), "restart keeps the chosen topology");
+		equal("Points 0", component(originalFrame, JLabel.class, label -> label.getText().startsWith("Points"))
+				.getText(), "restart resets the score");
+		equal("Time 0:00", component(originalFrame, JLabel.class, label -> label.getText().startsWith("Time"))
+				.getText(), "restart resets the clock");
+		start.doClick(0);
+		equal(SnakeField.Status.RUNNING, restartedField.status(), "the restarted game starts again");
 
 		restartedField.shutdown();
-		restartedFrame.dispose();
+		originalFrame.dispose();
 	}
 
 	private static void invokeKey(final JFrame frame, final int keyCode) {

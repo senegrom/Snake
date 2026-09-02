@@ -1,10 +1,8 @@
 package snake.gui;
 
 import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.Font;
-import java.awt.FontMetrics;
 import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
@@ -18,7 +16,7 @@ import snake.Position;
 import snake.Snake;
 import snake.topology.Topology;
 
-/** Game state, timer and renderer. All live mutation occurs on Swing's EDT. */
+/** Game state, timer and renderer. All live mutation occurs on the Swing EDT. */
 @SuppressWarnings("serial")
 final class SnakeField extends JPanel {
 	enum Status {
@@ -29,19 +27,13 @@ final class SnakeField extends JPanel {
 	static final int BOARD_ROWS = 31;
 	static final int CELL_COUNT = BOARD_COLUMNS * BOARD_ROWS;
 	static final int DEFAULT_SPEED = 1;
-	static final List<Integer> MOVE_DELAYS_MS = List.of(200, 160, 120, 80, 50, 30);
+	/** Milliseconds between steps for speed levels 1 to 9. */
+	static final List<Integer> MOVE_DELAYS_MS = List.of(200, 160, 120, 80, 50, 30, 20, 14, 10);
 	static final String ERROR_PROPERTY = "gameError";
 	static final String FINISHED_PROPERTY = "gameFinished";
 	static final String POINTS_PROPERTY = "points";
 	static final String TIME_PROPERTY = "elapsedSeconds";
 
-	private static final Color APPLE_COLOR = Color.RED;
-	private static final Color BACKGROUND = Color.WHITE;
-	private static final Color FOREGROUND = Color.BLACK;
-	private static final Color SNAKE_COLOR = Color.BLUE;
-	private static final Color WIN_COLOR = new Color(0, 128, 0);
-	private static final Font END_FONT = new Font("Verdana", Font.BOLD, 40);
-	private static final int CELL_SIZE = 10;
 	private static final List<Position> BOARD_CELLS = IntStream.range(0, CELL_COUNT)
 			.mapToObj(index -> new Position(index % BOARD_COLUMNS, index / BOARD_COLUMNS))
 			.toList();
@@ -56,6 +48,7 @@ final class SnakeField extends JPanel {
 	private int displayedSeconds = -1;
 	private final Timer moveTimer;
 	private final LongSupplier nanoTime;
+	private final BoardPainter painter = new BoardPainter();
 	private long runStartedNanos;
 	private final Snake snake;
 	private final int startLength;
@@ -81,8 +74,8 @@ final class SnakeField extends JPanel {
 		validateBoardState(snake, apple);
 		startLength = snake.length();
 
-		setBackground(BACKGROUND);
-		setPreferredSize(new Dimension(BOARD_COLUMNS * CELL_SIZE + 2, BOARD_ROWS * CELL_SIZE + 2));
+		setBackground(BoardPainter.MARGIN_COLOR);
+		setPreferredSize(BoardPainter.PANEL_SIZE);
 
 		moveTimer = new Timer(MOVE_DELAYS_MS.get(DEFAULT_SPEED - 1), event -> onTimerTick());
 	}
@@ -109,6 +102,10 @@ final class SnakeField extends JPanel {
 		return status;
 	}
 
+	Topology topology() {
+		return topology;
+	}
+
 	int elapsedSeconds() {
 		return Math.toIntExact(elapsedNanos() / 1_000_000_000L);
 	}
@@ -122,7 +119,7 @@ final class SnakeField extends JPanel {
 	}
 
 	Color endMessageColor() {
-		return won() ? WIN_COLOR : APPLE_COLOR;
+		return won() ? BoardPainter.WIN_COLOR : BoardPainter.APPLE_COLOR;
 	}
 
 	void startGame() {
@@ -209,17 +206,14 @@ final class SnakeField extends JPanel {
 		if (status != Status.READY)
 			throw new IllegalStateException("Topology cannot change after the game starts");
 		this.topology = Objects.requireNonNull(topology, "topology");
+		repaint();
 	}
 
 	@Override
 	protected void paintComponent(final Graphics graphics) {
 		super.paintComponent(graphics);
-		graphics.setColor(FOREGROUND);
-		graphics.drawRect(0, 0, getWidth() - 1, getHeight() - 1);
-		paintSnake(graphics);
-		paintApple(graphics);
-		if (status == Status.FINISHED)
-			paintEndMessage(graphics);
+		painter.paint((Graphics2D) graphics, getWidth(), getHeight(), snake, apple, topology,
+				status == Status.FINISHED ? endMessage() : null, endMessageColor());
 	}
 
 	private void abortGame(final RuntimeException cause) {
@@ -261,32 +255,6 @@ final class SnakeField extends JPanel {
 		} catch (final RuntimeException cause) {
 			abortGame(cause);
 		}
-	}
-
-	private void paintApple(final Graphics graphics) {
-		if (apple == null)
-			return;
-		graphics.setColor(APPLE_COLOR);
-		graphics.fillOval(apple.x() * CELL_SIZE + 1, apple.y() * CELL_SIZE + 1, CELL_SIZE, CELL_SIZE);
-		graphics.setColor(FOREGROUND);
-		graphics.drawOval(apple.x() * CELL_SIZE + 1, apple.y() * CELL_SIZE + 1, CELL_SIZE, CELL_SIZE);
-	}
-
-	private void paintEndMessage(final Graphics graphics) {
-		final String text = endMessage();
-		graphics.setFont(END_FONT);
-		graphics.setColor(endMessageColor());
-		final FontMetrics metrics = graphics.getFontMetrics();
-		graphics.drawString(text, (getWidth() - metrics.stringWidth(text)) / 2, getHeight() / 2);
-	}
-
-	private void paintSnake(final Graphics graphics) {
-		graphics.setColor(SNAKE_COLOR);
-		for (final Position position : snake.body())
-			graphics.fillRect(position.x() * CELL_SIZE + 1, position.y() * CELL_SIZE + 1, CELL_SIZE, CELL_SIZE);
-		graphics.setColor(FOREGROUND);
-		for (final Position position : snake.body())
-			graphics.drawRect(position.x() * CELL_SIZE + 1, position.y() * CELL_SIZE + 1, CELL_SIZE, CELL_SIZE);
 	}
 
 	private static Position spawnApple(final Snake snake) {

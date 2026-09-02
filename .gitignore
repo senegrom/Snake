@@ -10,3 +10,6 @@
 
 # JVM crash logs
 hs_err_pid*
+
+# Local packaging output
+/Snake.jar

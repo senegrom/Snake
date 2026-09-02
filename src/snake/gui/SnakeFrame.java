@@ -29,12 +29,13 @@ import snake.topology.Topology;
 
 /** Main application window and entry point. */
 public final class SnakeFrame {
-	private static final String VERSION = "0.3.0";
+	private static final String VERSION = "0.4.0";
 	private static final String ABOUT_TEXT = "Snake " + VERSION + " by CGH.";
 
 	private final JButton aboutButton = new JButton("About");
 	private final JButton exitButton = new JButton("Exit");
-	private final SnakeField field = new SnakeField();
+	private SnakeField field;
+	private final JPanel fieldWrapper = new JPanel(new GridBagLayout());
 	private final JFrame frame = new JFrame("Snake");
 	private final JButton pauseButton = new JButton("Pause");
 	private final JLabel pointsLabel = new JLabel("Points 0");
@@ -44,20 +45,14 @@ public final class SnakeFrame {
 			SnakeField.MOVE_DELAYS_MS.size(), SnakeField.DEFAULT_SPEED);
 	private final JButton startButton = new JButton("Start");
 	private final JLabel timeLabel = new JLabel("Time 0:00");
-	private final JComboBox<Topology> topologyBox = new JComboBox<>(Topology.values());
+	private final JComboBox<Topology> topologyBox = new JComboBox<>(Topology.PRESETS.toArray(Topology[]::new));
 
 	private SnakeFrame() {
 		configureControls();
 		configureLayout();
 		bindGameKeys();
+		attachField(new SnakeField());
 
-		field.addPropertyChangeListener(SnakeField.POINTS_PROPERTY,
-				event -> setPoints((Integer) event.getNewValue()));
-		field.addPropertyChangeListener(SnakeField.TIME_PROPERTY,
-				event -> setTime((Integer) event.getNewValue()));
-		field.addPropertyChangeListener(SnakeField.FINISHED_PROPERTY, event -> gameFinished());
-		field.addPropertyChangeListener(SnakeField.ERROR_PROPERTY,
-				event -> showError((RuntimeException) event.getNewValue()));
 		frame.setResizable(false);
 		frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 		frame.pack();
@@ -74,6 +69,21 @@ public final class SnakeFrame {
 			}
 			new SnakeFrame();
 		});
+	}
+
+	/** Installs a field into the window and applies the selected speed and topology. */
+	private void attachField(final SnakeField newField) {
+		field = newField;
+		field.addPropertyChangeListener(SnakeField.POINTS_PROPERTY,
+				event -> setPoints((Integer) event.getNewValue()));
+		field.addPropertyChangeListener(SnakeField.TIME_PROPERTY,
+				event -> setTime((Integer) event.getNewValue()));
+		field.addPropertyChangeListener(SnakeField.FINISHED_PROPERTY, event -> gameFinished());
+		field.addPropertyChangeListener(SnakeField.ERROR_PROPERTY,
+				event -> showError((RuntimeException) event.getNewValue()));
+		fieldWrapper.add(field);
+		field.setMoveDelay(SnakeField.MOVE_DELAYS_MS.get(speedSlider.getValue() - 1));
+		field.setTopology((Topology) topologyBox.getSelectedItem());
 	}
 
 	private void gameFinished() {
@@ -152,18 +162,25 @@ public final class SnakeFrame {
 		controls.add(buttonRow);
 		controls.add(settingsRow);
 
-		final JPanel fieldWrapper = new JPanel(new GridBagLayout());
-		fieldWrapper.add(field);
-
 		frame.setLayout(new BorderLayout());
 		frame.add(controls, BorderLayout.NORTH);
 		frame.add(fieldWrapper, BorderLayout.CENTER);
 	}
 
+	/** Replaces the field in place, keeping the window, speed and topology. */
 	private void restartGame() {
 		field.shutdown();
-		frame.dispose();
-		new SnakeFrame();
+		fieldWrapper.remove(field);
+		attachField(new SnakeField());
+		setPoints(0);
+		setTime(0);
+		startButton.setEnabled(true);
+		pauseButton.setEnabled(false);
+		pauseButton.setText("Pause");
+		speedSlider.setEnabled(true);
+		topologyBox.setEnabled(true);
+		fieldWrapper.revalidate();
+		fieldWrapper.repaint();
 	}
 
 	private void showError(final RuntimeException cause) {

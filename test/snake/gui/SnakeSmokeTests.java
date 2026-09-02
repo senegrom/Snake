@@ -3,6 +3,7 @@ package snake.gui;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
@@ -183,15 +184,72 @@ public final class SnakeSmokeTests {
 				List.of(new Position(2, 1), new Position(1, 1), new Position(0, 1)));
 		final SnakeField field = new SnakeField(snake, new Position(3, 1));
 		final BufferedImage image = render(field);
-		final int cellSize = (image.getWidth() - 2) / SnakeField.BOARD_COLUMNS;
+		equal(BoardPainter.PANEL_SIZE.width, image.getWidth(), "panel width includes both margins");
+		equal(BoardPainter.PANEL_SIZE.height, image.getHeight(), "panel height includes both margins");
 
-		equal(Color.BLACK.getRGB(), image.getRGB(0, 0), "board border paints black");
-		equal(Color.WHITE.getRGB(), image.getRGB(5 * cellSize + 5, 5 * cellSize + 5),
-				"empty board cells paint white");
-		equal(Color.BLUE.getRGB(), image.getRGB(2 * cellSize + 5, cellSize + 5),
-				"snake cells paint blue");
-		equal(Color.RED.getRGB(), image.getRGB(3 * cellSize + 5, cellSize + 5),
-				"apple paints red");
+		equal(BoardPainter.MARGIN_COLOR.getRGB(), image.getRGB(0, 0), "corners paint the margin colour");
+		final int headPixel = pixel(image, BoardPainter.cellCenter(new Position(2, 1)));
+		final int bodyPixel = pixel(image, BoardPainter.cellCenter(new Position(1, 1)));
+		check(isBluish(bodyPixel), "body cells paint in shaded blue");
+		check(isBluish(headPixel), "the head paints in shaded blue");
+		check(headPixel != bodyPixel, "the head is shaded differently from the body");
+		check(isReddish(pixel(image, BoardPainter.cellCenter(new Position(3, 1)))),
+				"the apple paints in shaded red");
+		final Point head = BoardPainter.cellCenter(new Position(2, 1));
+		equal(BoardPainter.EYE_COLOR.getRGB(), image.getRGB(head.x + 1, head.y - 1),
+				"the eye looks in the movement direction");
+		check(isLightGrey(pixel(image, BoardPainter.cellCenter(new Position(5, 5)))),
+				"empty cells show the light shaded texture");
+		check(brightness(pixel(image, BoardPainter.cellCenter(new Position(0, 0))))
+				> brightness(pixel(image, BoardPainter.cellCenter(
+						new Position(SnakeField.BOARD_COLUMNS - 1, SnakeField.BOARD_ROWS - 1)))),
+				"the board is shaded from its top-left corner");
+
+		final int midX = BoardPainter.BOARD_X + BoardPainter.BOARD_WIDTH / 2;
+		final int midY = BoardPainter.BOARD_Y + BoardPainter.BOARD_HEIGHT / 2;
+		final int wall = BoardPainter.WALL_COLOR.getRGB();
+		equal(wall, image.getRGB(BoardPainter.BOARD_X - 2, midY), "plane paints a thick left wall");
+		equal(wall, image.getRGB(BoardPainter.BOARD_X + BoardPainter.BOARD_WIDTH + 1, midY),
+				"plane paints a thick right wall");
+		equal(wall, image.getRGB(midX, BoardPainter.BOARD_Y - 2), "plane paints a thick top wall");
+		equal(wall, image.getRGB(midX, BoardPainter.BOARD_Y + BoardPainter.BOARD_HEIGHT + 1),
+				"plane paints a thick bottom wall");
+
+		// A snake along the left edge is echoed in the right margin: at the same
+		// row on the torus, at the mirrored row on the Klein bottle
+		final int ghostX = BoardPainter.BOARD_X + BoardPainter.BOARD_WIDTH + BoardPainter.CELL_SIZE
+				+ BoardPainter.CELL_SIZE / 2;
+		final int sameRow = BoardPainter.BOARD_Y + 5 * BoardPainter.CELL_SIZE + BoardPainter.CELL_SIZE / 2;
+		final int mirroredRow = BoardPainter.BOARD_Y
+				+ (SnakeField.BOARD_ROWS - 1 - 5) * BoardPainter.CELL_SIZE + BoardPainter.CELL_SIZE / 2;
+		final BufferedImage torusImage = render(edgeField(Topology.TORUS));
+		check(isBluish(torusImage.getRGB(ghostX, sameRow)), "torus margin echoes the snake at the same row");
+		check(!isBluish(torusImage.getRGB(ghostX, mirroredRow)), "torus margin is not mirrored");
+		check(torusImage.getRGB(BoardPainter.BOARD_X - 2, midY) != wall, "torus paints no wall");
+		final BufferedImage kleinImage = render(edgeField(Topology.KLEIN_BOTTLE));
+		check(isBluish(kleinImage.getRGB(ghostX, mirroredRow)),
+				"Klein bottle margin echoes the snake at the mirrored row");
+		check(!isBluish(kleinImage.getRGB(ghostX, sameRow)),
+				"Klein bottle margin does not echo the snake at the same row");
+		final BufferedImage planeImage = render(edgeField(Topology.PLANE));
+		check(!isBluish(planeImage.getRGB(ghostX, sameRow)), "plane margin shows no neighbour");
+
+		// A snake near the top edge is echoed in the bottom margin; the
+		// projective plane mirrors the columns
+		final Snake topSnake = new Snake(Direction.DOWN,
+				List.of(new Position(5, 2), new Position(5, 1), new Position(5, 0)));
+		final int ghostY = BoardPainter.BOARD_Y + BoardPainter.BOARD_HEIGHT + BoardPainter.CELL_SIZE
+				+ BoardPainter.CELL_SIZE / 2;
+		final int sameColumn = BoardPainter.BOARD_X + 5 * BoardPainter.CELL_SIZE + BoardPainter.CELL_SIZE / 2;
+		final int mirroredColumn = BoardPainter.BOARD_X
+				+ (SnakeField.BOARD_COLUMNS - 1 - 5) * BoardPainter.CELL_SIZE + BoardPainter.CELL_SIZE / 2;
+		final SnakeField projective = new SnakeField(topSnake, new Position(10, 10));
+		projective.setTopology(Topology.PROJECTIVE_PLANE);
+		final BufferedImage projectiveImage = render(projective);
+		check(isBluish(projectiveImage.getRGB(mirroredColumn, ghostY)),
+				"projective plane bottom margin mirrors the columns");
+		check(!isBluish(projectiveImage.getRGB(sameColumn, ghostY)),
+				"projective plane bottom margin is not a plain wrap");
 
 		final Snake wallSnake = new Snake(Direction.RIGHT,
 				List.of(new Position(SnakeField.BOARD_COLUMNS - 1, 2),
@@ -260,6 +318,42 @@ public final class SnakeSmokeTests {
 					body.add(position);
 			}
 		return body;
+	}
+
+	/** A short snake lying along the left edge in row 5, on the given topology. */
+	private static SnakeField edgeField(final Topology topology) {
+		final Snake snake = new Snake(Direction.RIGHT,
+				List.of(new Position(2, 5), new Position(1, 5), new Position(0, 5)));
+		final SnakeField field = new SnakeField(snake, new Position(10, 10));
+		field.setTopology(topology);
+		return field;
+	}
+
+	private static int pixel(final BufferedImage image, final Point point) {
+		return image.getRGB(point.x, point.y);
+	}
+
+	/** True for the faint blended echo of a blue snake cell, false for any grey or texture pixel. */
+	private static boolean isBluish(final int rgb) {
+		return (rgb & 0xFF) - ((rgb >> 16) & 0xFF) >= 60;
+	}
+
+	private static boolean isReddish(final int rgb) {
+		final int red = (rgb >> 16) & 0xFF;
+		return red - ((rgb >> 8) & 0xFF) >= 60 && red - (rgb & 0xFF) >= 60;
+	}
+
+	private static int brightness(final int rgb) {
+		return (rgb & 0xFF) + ((rgb >> 8) & 0xFF) + ((rgb >> 16) & 0xFF);
+	}
+
+	/** True for the near-white, neutral shades of an empty board cell. */
+	private static boolean isLightGrey(final int rgb) {
+		final int red = (rgb >> 16) & 0xFF;
+		final int green = (rgb >> 8) & 0xFF;
+		final int blue = rgb & 0xFF;
+		return Math.min(red, Math.min(green, blue)) >= 200
+				&& Math.max(red, Math.max(green, blue)) - Math.min(red, Math.min(green, blue)) <= 6;
 	}
 
 	private static BufferedImage render(final SnakeField field) {

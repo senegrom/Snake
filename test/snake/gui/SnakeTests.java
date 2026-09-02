@@ -9,6 +9,7 @@ import javax.swing.SwingUtilities;
 import snake.Direction;
 import snake.Position;
 import snake.Snake;
+import snake.topology.Gluing;
 import snake.topology.Topology;
 
 /** Dependency-free regression and exhaustive property tests. */
@@ -91,6 +92,15 @@ public final class SnakeTests {
 		return body;
 	}
 
+	/** Every combination of edge gluings, including the rotated duplicates of the presets. */
+	private static List<Topology> allTopologies() {
+		final List<Topology> topologies = new ArrayList<>();
+		for (final Gluing horizontal : Gluing.values())
+			for (final Gluing vertical : Gluing.values())
+				topologies.add(new Topology(horizontal, vertical));
+		return topologies;
+	}
+
 	private static boolean isInside(final Position position, final int columns, final int rows) {
 		return position.x() >= 0 && position.x() < columns
 				&& position.y() >= 0 && position.y() < rows;
@@ -129,7 +139,7 @@ public final class SnakeTests {
 		final int columns = 6;
 		final int rows = 4;
 		final Position inside = new Position(3, 2);
-		for (final Topology topology : Topology.values())
+		for (final Topology topology : allTopologies())
 			equal(inside, topology.map(inside, columns, rows), topology + " keeps in-bounds positions");
 
 		equal(null, Topology.PLANE.map(new Position(6, 1), columns, rows), "plane has a right wall");
@@ -168,12 +178,32 @@ public final class SnakeTests {
 				() -> Topology.TORUS.map(new Position(7, 1), columns, rows),
 				"topology rejects positions more than one step outside");
 		equal("Klein Bottle", Topology.KLEIN_BOTTLE.toString(), "topology display name");
+
+		equal(new Position(0, 2), Topology.MOBIUS_BAND.map(new Position(6, 1), columns, rows),
+				"Möbius band right crossing reflects y");
+		equal(null, Topology.MOBIUS_BAND.map(new Position(2, 4), columns, rows), "Möbius band has a bottom wall");
+		equal(new Position(0, 2), Topology.CYLINDER.map(new Position(6, 2), columns, rows),
+				"cylinder wraps right to left");
+		equal(null, Topology.CYLINDER.map(new Position(2, -1), columns, rows), "cylinder has a top wall");
+		equal(Topology.KLEIN_BOTTLE, new Topology(Gluing.FLIP, Gluing.WRAP), "topologies are value objects");
+		equal("Klein Bottle", new Topology(Gluing.WRAP, Gluing.FLIP).toString(),
+				"a rotated Klein bottle keeps its name");
+		equal("Cylinder", new Topology(Gluing.WALL, Gluing.WRAP).toString(), "a rotated cylinder keeps its name");
+		equal("Möbius Band", new Topology(Gluing.WALL, Gluing.FLIP).toString(),
+				"a rotated Möbius band keeps its name");
+		equal(List.of("Plane", "Cylinder", "Möbius Band", "Torus", "Klein Bottle", "Projective Plane"),
+				Topology.PRESETS.stream().map(Topology::toString).toList(),
+				"presets cover the six surfaces in order");
+		expect(NullPointerException.class, () -> new Topology(null, Gluing.WRAP),
+				"topology rejects a null horizontal gluing");
+		expect(NullPointerException.class, () -> new Topology(Gluing.WRAP, null),
+				"topology rejects a null vertical gluing");
 	}
 
 	private static void testTopologyProperties() {
 		for (int columns = 1; columns <= 6; columns++) {
 			for (int rows = 1; rows <= 5; rows++) {
-				for (final Topology topology : Topology.values()) {
+				for (final Topology topology : allTopologies()) {
 					for (int y = 0; y < rows; y++) {
 						for (int x = 0; x < columns; x++) {
 							final Position origin = new Position(x, y);
@@ -182,8 +212,13 @@ public final class SnakeTests {
 								final Position mapped = topology.map(stepped, columns, rows);
 								final String context = topology + " " + columns + "x" + rows + " "
 										+ origin + " " + direction;
-								if (topology == Topology.PLANE && !isInside(stepped, columns, rows)) {
-									check(mapped == null, context + " stops at a plane wall");
+								Gluing crossed = null;
+								if (stepped.x() < 0 || stepped.x() >= columns)
+									crossed = topology.horizontal();
+								else if (stepped.y() < 0 || stepped.y() >= rows)
+									crossed = topology.vertical();
+								if (crossed == Gluing.WALL) {
+									check(mapped == null, context + " stops at a wall");
 									continue;
 								}
 								if (mapped == null) {
@@ -391,7 +426,8 @@ public final class SnakeTests {
 		equal(new Position(0, 14), wrappingSnake.head(), "accepted post-wrap turn is applied");
 		equal(SnakeField.Status.READY, wrappingField.status(), "post-wrap input remains playable");
 
-		for (final Topology topology : List.of(Topology.KLEIN_BOTTLE, Topology.PROJECTIVE_PLANE)) {
+		for (final Topology topology : List.of(Topology.MOBIUS_BAND, Topology.KLEIN_BOTTLE,
+				Topology.PROJECTIVE_PLANE)) {
 			final Snake topologicalSnake = new Snake(Direction.RIGHT,
 					List.of(new Position(SnakeField.BOARD_COLUMNS - 1, 10),
 							new Position(SnakeField.BOARD_COLUMNS - 2, 10)));
@@ -409,5 +445,12 @@ public final class SnakeTests {
 		projectiveField.step();
 		equal(new Position(SnakeField.BOARD_COLUMNS - 1 - 5, SnakeField.BOARD_ROWS - 1),
 				projectiveSnake.head(), "projective plane reflects the column across a top/bottom edge");
+
+		final Snake cylinderSnake = new Snake(Direction.UP,
+				List.of(new Position(5, 0), new Position(5, 1), new Position(5, 2)));
+		final SnakeField cylinderField = new SnakeField(cylinderSnake, new Position(10, 10));
+		cylinderField.setTopology(Topology.CYLINDER);
+		cylinderField.step();
+		equal(SnakeField.Status.FINISHED, cylinderField.status(), "cylinder keeps its top wall");
 	}
 }
