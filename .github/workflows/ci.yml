@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - master
+  pull_request:
+    branches:
+      - master
   workflow_dispatch:
 
 permissions:
@@ -33,7 +36,8 @@ jobs:
           java-version-file: .java-version
 
       - name: Check whitespace
-        run: git diff --check HEAD^
+        # A root commit has no parent, so fall back to diffing against the empty tree
+        run: git diff --check "$(git rev-parse --verify --quiet HEAD^ || git hash-object -t tree /dev/null)"
 
       - name: Compile with all warnings enabled
         shell: bash

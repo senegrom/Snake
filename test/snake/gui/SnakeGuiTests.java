@@ -15,28 +15,19 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JSlider;
 import javax.swing.KeyStroke;
-import javax.swing.SwingUtilities;
 import snake.Direction;
 import snake.topology.Topology;
+import static snake.gui.TestSupport.check;
+import static snake.gui.TestSupport.equal;
 
 /** End-to-end smoke tests for the real Swing window under a virtual display. */
 public final class SnakeGuiTests {
-	private static int checks;
-
 	private SnakeGuiTests() {
 	}
 
-	public static void main(final String[] args) throws Exception {
+	public static void main(final String[] args) {
 		SnakeFrame.main(args);
-		try {
-			SwingUtilities.invokeAndWait(SnakeGuiTests::run);
-			System.out.println(checks + " GUI checks passed");
-		} catch (final Exception exception) {
-			final Throwable cause = exception.getCause() == null ? exception : exception.getCause();
-			cause.printStackTrace();
-			System.exit(1);
-		}
-		System.exit(0);
+		System.exit(TestSupport.run("SnakeGuiTests", SnakeGuiTests::run));
 	}
 
 	private static void run() {
@@ -117,10 +108,10 @@ public final class SnakeGuiTests {
 		final KeyStroke keyStroke = KeyStroke.getKeyStroke(keyCode, 0);
 		final Object actionKey = frame.getRootPane()
 				.getInputMap(javax.swing.JComponent.WHEN_IN_FOCUSED_WINDOW).get(keyStroke);
-		check(actionKey != null, "key is present in the window input map: " + keyCode);
-		final Action action = frame.getRootPane().getActionMap().get(actionKey);
+		final Action action = actionKey == null ? null : frame.getRootPane().getActionMap().get(actionKey);
 		check(action != null, "key has a window action: " + keyCode);
-		action.actionPerformed(new ActionEvent(frame, ActionEvent.ACTION_PERFORMED, actionKey.toString()));
+		if (action != null)
+			action.actionPerformed(new ActionEvent(frame, ActionEvent.ACTION_PERFORMED, actionKey.toString()));
 	}
 
 	private static JFrame visibleSnakeFrame() {
@@ -154,16 +145,5 @@ public final class SnakeGuiTests {
 			}
 		}
 		throw new AssertionError("Missing component: " + type.getSimpleName());
-	}
-
-	private static void equal(final Object expected, final Object actual, final String message) {
-		check(Objects.equals(expected, actual),
-				message + " (expected " + expected + ", got " + actual + ")");
-	}
-
-	private static void check(final boolean condition, final String message) {
-		if (!condition)
-			throw new AssertionError(message);
-		checks++;
 	}
 }

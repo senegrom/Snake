@@ -7,28 +7,26 @@ import java.awt.Point;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.swing.JComponent;
 import javax.swing.RepaintManager;
-import javax.swing.SwingUtilities;
 import snake.Direction;
 import snake.Position;
 import snake.Snake;
 import snake.topology.Topology;
+import static snake.gui.TestSupport.check;
+import static snake.gui.TestSupport.equal;
+import static snake.gui.TestSupport.expect;
 
 /** Targeted model, timing and headless-rendering smoke tests. */
 public final class SnakeSmokeTests {
-	private static int checks;
-
 	private SnakeSmokeTests() {
 	}
 
-	public static void main(final String[] args) throws Exception {
+	public static void main(final String[] args) {
 		System.setProperty("java.awt.headless", "true");
-		SwingUtilities.invokeAndWait(SnakeSmokeTests::run);
-		System.out.println(checks + " smoke checks passed");
+		System.exit(TestSupport.run("SnakeSmokeTests", SnakeSmokeTests::run));
 	}
 
 	private static void run() {
@@ -70,17 +68,17 @@ public final class SnakeSmokeTests {
 	private static void testValidationBoundaries() {
 		final Snake snake = new Snake(Direction.RIGHT,
 				List.of(new Position(2, 0), new Position(1, 0), new Position(0, 0)));
-		expectIllegalArgument(() -> new SnakeField(snake,
+		expect(IllegalArgumentException.class, () -> new SnakeField(snake,
 				new Position(SnakeField.BOARD_COLUMNS, 1)),
 				"apple at the exclusive right bound is rejected");
-		expectIllegalArgument(() -> new SnakeField(snake,
+		expect(IllegalArgumentException.class, () -> new SnakeField(snake,
 				new Position(1, SnakeField.BOARD_ROWS)),
 				"apple at the exclusive bottom bound is rejected");
-		expectIllegalArgument(() -> Topology.TORUS.map(new Position(0, 0), 0, 1),
+		expect(IllegalArgumentException.class, () -> Topology.TORUS.map(new Position(0, 0), 0, 1),
 				"zero-column boards are rejected before mapping");
-		expectIllegalArgument(() -> Topology.TORUS.map(new Position(0, 0), 1, 0),
+		expect(IllegalArgumentException.class, () -> Topology.TORUS.map(new Position(0, 0), 1, 0),
 				"zero-row boards are rejected before mapping");
-		expectNullPointer(() -> new SnakeField(snake, new Position(10, 10), null),
+		expect(NullPointerException.class, () -> new SnakeField(snake, new Position(10, 10), null),
 				"field rejects a null clock");
 	}
 
@@ -91,7 +89,7 @@ public final class SnakeSmokeTests {
 		final int selectedFreeCell = new Random(3).nextInt(freeCells);
 		equal(nthFreeCell(snake, selectedFreeCell), SnakeField.spawnApple(snake, new Random(3)),
 				"apple placement honours the supplied random selection");
-		expectNullPointer(() -> SnakeField.spawnApple(snake, null),
+		expect(NullPointerException.class, () -> SnakeField.spawnApple(snake, null),
 				"apple placement rejects a null random source");
 	}
 
@@ -380,32 +378,4 @@ public final class SnakeSmokeTests {
 		return false;
 	}
 
-	private static void expectNullPointer(final Runnable action, final String message) {
-		try {
-			action.run();
-			throw new AssertionError(message + " (nothing was thrown)");
-		} catch (final NullPointerException expected) {
-			checks++;
-		}
-	}
-
-	private static void expectIllegalArgument(final Runnable action, final String message) {
-		try {
-			action.run();
-			throw new AssertionError(message + " (nothing was thrown)");
-		} catch (final IllegalArgumentException expected) {
-			checks++;
-		}
-	}
-
-	private static void equal(final Object expected, final Object actual, final String message) {
-		check(Objects.equals(expected, actual),
-				message + " (expected " + expected + ", got " + actual + ")");
-	}
-
-	private static void check(final boolean condition, final String message) {
-		if (!condition)
-			throw new AssertionError(message);
-		checks++;
-	}
 }

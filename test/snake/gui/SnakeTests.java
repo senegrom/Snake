@@ -3,7 +3,6 @@ package snake.gui;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import javax.swing.SwingUtilities;
 import snake.Direction;
@@ -11,33 +10,18 @@ import snake.Position;
 import snake.Snake;
 import snake.topology.Gluing;
 import snake.topology.Topology;
+import static snake.gui.TestSupport.check;
+import static snake.gui.TestSupport.equal;
+import static snake.gui.TestSupport.expect;
 
 /** Dependency-free regression and exhaustive property tests. */
 public final class SnakeTests {
-	@FunctionalInterface
-	private interface CheckedAction {
-		void run() throws Exception;
-	}
-
-	private static int failed;
-	private static int passed;
-
 	private SnakeTests() {
 	}
 
 	public static void main(final String[] args) {
 		System.setProperty("java.awt.headless", "true");
-		try {
-			SwingUtilities.invokeAndWait(SnakeTests::runAll);
-		} catch (final Exception exception) {
-			failed++;
-			final Throwable cause = exception.getCause() == null ? exception : exception.getCause();
-			System.err.println("FAIL: unexpected suite failure: " + cause);
-			cause.printStackTrace();
-		}
-
-		System.out.println(passed + " checks passed, " + failed + " failed");
-		System.exit(failed == 0 ? 0 : 1);
+		System.exit(TestSupport.run("SnakeTests", SnakeTests::runAll));
 	}
 
 	private static void runAll() {
@@ -50,32 +34,6 @@ public final class SnakeTests {
 		testFieldCollisions();
 		testFieldEatingAndWinning();
 		testFieldTopologiesAndInput();
-	}
-
-	private static void check(final boolean condition, final String message) {
-		if (condition) {
-			passed++;
-		} else {
-			failed++;
-			System.err.println("FAIL: " + message);
-		}
-	}
-
-	private static void equal(final Object expected, final Object actual, final String message) {
-		check(Objects.equals(expected, actual),
-				message + " (expected " + expected + ", got " + actual + ")");
-	}
-
-	private static void expect(final Class<? extends Exception> type, final CheckedAction action,
-			final String message) {
-		try {
-			action.run();
-			check(false, message + " (nothing was thrown)");
-		} catch (final Exception thrown) {
-			check(type.isInstance(thrown),
-					message + " (expected " + type.getSimpleName() + ", got "
-							+ thrown.getClass().getSimpleName() + ")");
-		}
 	}
 
 	private static List<Position> almostFullBody(final Position head, final Position... freePositions) {
