@@ -285,12 +285,17 @@ final class BoardPainter {
 			final FontMetrics metrics = g.getFontMetrics();
 			final int textWidth = metrics.stringWidth(text);
 			final int x = BOARD_X + (BOARD_WIDTH - textWidth) / 2;
-			// Non-terminal banners stay in the margin, so paused turns remain visible.
+			// Keep non-terminal banners above both the board and its wall band.
+			// Clipping also protects the wall when a platform substitutes a taller font.
+			final int marginHeight = BOARD_Y - WALL_THICKNESS;
+			if (!terminal)
+				g.clipRect(BOARD_X, 0, BOARD_WIDTH, marginHeight);
 			final int baseline = terminal ? BOARD_Y + BOARD_HEIGHT / 2
-					: BOARD_Y / 2 + (metrics.getAscent() - metrics.getDescent()) / 2;
+					: marginHeight / 2 + (metrics.getAscent() - metrics.getDescent()) / 2;
+			final int padding = terminal ? 8 : 4;
 			g.setColor(new Color(255, 255, 255, 225));
-			g.fillRoundRect(x - 12, baseline - metrics.getAscent() - 8,
-					textWidth + 24, metrics.getHeight() + 16, 14, 14);
+			g.fillRoundRect(x - 12, baseline - metrics.getAscent() - padding,
+					textWidth + 24, metrics.getHeight() + 2 * padding, 14, 14);
 			g.setColor(color);
 			g.drawString(text, x, baseline);
 		} finally {

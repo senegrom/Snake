@@ -26,6 +26,7 @@ public final class SnakeInteractionTests {
 		System.exit(TestSupport.run("SnakeInteractionTests", () -> {
 			testDirectionRepainting();
 			testStatusNotifications();
+			testOverlayKeepsWallsVisible();
 			testZoomAndTopologyHints();
 		}));
 	}
@@ -103,6 +104,36 @@ public final class SnakeInteractionTests {
 				SnakeField.Status.RUNNING, SnakeField.Status.FINISHED), statuses,
 				"only actual lifecycle changes publish status events");
 		equal("Game Over", field.overlayMessage(), "terminal message preserved");
+	}
+
+	private static void testOverlayKeepsWallsVisible() {
+		final SnakeField field = fixture(Topology.PLANE);
+		try {
+			for (final int zoom : SnakeField.ZOOM_LEVELS) {
+				field.setZoom(zoom);
+				check(topWallVisible(render(field), zoom), "ready banner leaves the full top wall visible");
+			}
+			field.startGame();
+			field.pauseGame();
+			for (final int zoom : SnakeField.ZOOM_LEVELS) {
+				field.setZoom(zoom);
+				check(topWallVisible(render(field), zoom), "pause banner leaves the full top wall visible");
+			}
+		} finally {
+			field.shutdown();
+		}
+	}
+
+	private static boolean topWallVisible(final BufferedImage image, final int zoom) {
+		final int left = BoardPainter.BOARD_X * zoom / 100;
+		final int right = (BoardPainter.BOARD_X + BoardPainter.BOARD_WIDTH) * zoom / 100;
+		final int top = (BoardPainter.BOARD_Y - BoardPainter.WALL_THICKNESS) * zoom / 100;
+		final int bottom = BoardPainter.BOARD_Y * zoom / 100;
+		for (int y = top; y < bottom; y++)
+			for (int x = left; x < right; x++)
+				if (image.getRGB(x, y) != BoardPainter.WALL_COLOR.getRGB())
+					return false;
+		return true;
 	}
 
 	private static void testZoomAndTopologyHints() {
