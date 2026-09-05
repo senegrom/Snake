@@ -185,7 +185,8 @@ public final class SnakeSmokeTests {
 		equal(BoardPainter.PANEL_SIZE.width, image.getWidth(), "panel width includes both margins");
 		equal(BoardPainter.PANEL_SIZE.height, image.getHeight(), "panel height includes both margins");
 
-		equal(BoardPainter.MARGIN_COLOR.getRGB(), image.getRGB(0, 0), "corners paint the margin colour");
+		equal(BoardPainter.WALL_MARGIN_COLOR.getRGB(), image.getRGB(0, 0),
+				"plane corners paint solid wall margin");
 		final int headPixel = pixel(image, BoardPainter.cellCenter(new Position(2, 1)));
 		final int bodyPixel = pixel(image, BoardPainter.cellCenter(new Position(1, 1)));
 		check(isBluish(bodyPixel), "body cells paint in shaded blue");
@@ -248,6 +249,30 @@ public final class SnakeSmokeTests {
 				"projective plane bottom margin mirrors the columns");
 		check(!isBluish(projectiveImage.getRGB(sameColumn, ghostY)),
 				"projective plane bottom margin is not a plain wrap");
+
+		// Corner neighbours combine both gluings: a snake near the top-left corner
+		// echoes in the bottom-right corner on the torus, in the top-right corner on
+		// the Klein bottle (rows mirrored) and in the top-left corner on the
+		// projective plane (a half turn)
+		final int cornerCellX = 2 * BoardPainter.CELL_SIZE + BoardPainter.CELL_SIZE / 2;
+		final int cornerCellY = BoardPainter.CELL_SIZE + BoardPainter.CELL_SIZE / 2;
+		final Point bottomRight = new Point(BoardPainter.BOARD_X + BoardPainter.BOARD_WIDTH + cornerCellX,
+				BoardPainter.BOARD_Y + BoardPainter.BOARD_HEIGHT + cornerCellY);
+		final Point topRight = new Point(BoardPainter.BOARD_X + BoardPainter.BOARD_WIDTH + cornerCellX,
+				BoardPainter.BOARD_Y - cornerCellY);
+		final Point topLeft = new Point(BoardPainter.BOARD_X - cornerCellX, BoardPainter.BOARD_Y - cornerCellY);
+		final BufferedImage torusCorners = render(cornerField(Topology.TORUS));
+		check(isBluish(pixel(torusCorners, bottomRight)), "torus corner echoes the snake unchanged");
+		check(!isBluish(pixel(torusCorners, topRight)), "torus corner is not mirrored");
+		final BufferedImage kleinCorners = render(cornerField(Topology.KLEIN_BOTTLE));
+		check(isBluish(pixel(kleinCorners, topRight)), "Klein bottle corner echoes the snake with rows mirrored");
+		check(!isBluish(pixel(kleinCorners, bottomRight)), "Klein bottle corner is not a plain copy");
+		final BufferedImage projectiveCorners = render(cornerField(Topology.PROJECTIVE_PLANE));
+		check(isBluish(pixel(projectiveCorners, topLeft)),
+				"projective plane corner echoes the snake turned by a half turn");
+		check(!isBluish(pixel(projectiveCorners, bottomRight)), "projective plane corner is not a plain copy");
+		equal(BoardPainter.WALL_MARGIN_COLOR.getRGB(), pixel(render(cornerField(Topology.CYLINDER)), topRight),
+				"cylinder corners beyond a wall are solid wall margin");
 
 		final Snake wallSnake = new Snake(Direction.RIGHT,
 				List.of(new Position(SnakeField.BOARD_COLUMNS - 1, 2),
@@ -322,6 +347,15 @@ public final class SnakeSmokeTests {
 	private static SnakeField edgeField(final Topology topology) {
 		final Snake snake = new Snake(Direction.RIGHT,
 				List.of(new Position(2, 5), new Position(1, 5), new Position(0, 5)));
+		final SnakeField field = new SnakeField(snake, new Position(10, 10));
+		field.setTopology(topology);
+		return field;
+	}
+
+	/** A short snake near the top-left corner, on the given topology. */
+	private static SnakeField cornerField(final Topology topology) {
+		final Snake snake = new Snake(Direction.LEFT,
+				List.of(new Position(1, 1), new Position(2, 1), new Position(3, 1)));
 		final SnakeField field = new SnakeField(snake, new Position(10, 10));
 		field.setTopology(topology);
 		return field;

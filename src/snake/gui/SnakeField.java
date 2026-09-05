@@ -54,6 +54,7 @@ final class SnakeField extends JPanel {
 	private final int startLength;
 	private Status status = Status.READY;
 	private Topology topology = Topology.PLANE;
+	private boolean won;
 
 	SnakeField() {
 		this(new Snake(Direction.RIGHT, DEFAULT_BODY));
@@ -111,7 +112,7 @@ final class SnakeField extends JPanel {
 	}
 
 	boolean won() {
-		return status == Status.FINISHED && apple == null;
+		return won;
 	}
 
 	String endMessage() {
@@ -179,6 +180,7 @@ final class SnakeField extends JPanel {
 		}
 		if (growing) {
 			if (snake.length() == CELL_COUNT) {
+				won = true;
 				apple = null;
 				endGame();
 			} else {

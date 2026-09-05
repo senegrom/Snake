@@ -9,6 +9,7 @@ import java.awt.FontMetrics;
 import java.awt.GradientPaint;
 import java.awt.Graphics2D;
 import java.awt.MultipleGradientPaint;
+import java.awt.Paint;
 import java.awt.Point;
 import java.awt.RadialGradientPaint;
 import java.awt.Rectangle;
@@ -62,6 +63,13 @@ final class BoardPainter {
 			BasicStroke.JOIN_MITER, 10f, new float[] { 4f, 4f }, 0f);
 	private static final GradientPaint SHADING = new GradientPaint(0, 0, BOARD_LIGHT_COLOR,
 			BOARD_WIDTH, BOARD_HEIGHT, BOARD_SHADE_COLOR);
+	// Cell paints are defined at the origin and reused by translating the graphics to each cell
+	private static final RadialGradientPaint APPLE_SHADING = cellShading(APPLE_COLOR);
+	private static final RadialGradientPaint HEAD_SHADING = cellShading(HEAD_COLOR);
+	private static final RadialGradientPaint SNAKE_SHADING = cellShading(SNAKE_COLOR);
+	private static final Color APPLE_OUTLINE = blend(APPLE_COLOR, Color.BLACK, 0.55f);
+	private static final Color HEAD_OUTLINE = blend(HEAD_COLOR, Color.BLACK, 0.6f);
+	private static final Color SNAKE_OUTLINE = blend(SNAKE_COLOR, Color.BLACK, 0.6f);
 
 	private final BufferedImage board = new BufferedImage(BOARD_WIDTH, BOARD_HEIGHT, BufferedImage.TYPE_INT_RGB);
 
@@ -103,13 +111,8 @@ final class BoardPainter {
 	private static void paintSnake(final Graphics2D g, final Snake snake) {
 		final Position head = snake.head();
 		for (final Position cell : snake.body()) {
-			final int x = cell.x() * CELL_SIZE;
-			final int y = cell.y() * CELL_SIZE;
-			final Color base = cell.equals(head) ? HEAD_COLOR : SNAKE_COLOR;
-			g.setPaint(shading(x, y, base));
-			g.fillRoundRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2, 4, 4);
-			g.setColor(blend(base, Color.BLACK, 0.6f));
-			g.drawRoundRect(x + 1, y + 1, CELL_SIZE - 3, CELL_SIZE - 3, 4, 4);
+			final boolean isHead = cell.equals(head);
+			paintCell(g, cell, isHead ? HEAD_SHADING : SNAKE_SHADING, isHead ? HEAD_OUTLINE : SNAKE_OUTLINE);
 		}
 		// One eye, two pixels ahead of the head centre in the queued direction
 		final Position ahead = snake.direction().move(head);
@@ -119,22 +122,41 @@ final class BoardPainter {
 		g.fillRect(centreX + 2 * (ahead.x() - head.x()) - 1, centreY + 2 * (ahead.y() - head.y()) - 1, 2, 2);
 	}
 
+	private static void paintCell(final Graphics2D g, final Position cell, final Paint shading, final Color outline) {
+		final int x = cell.x() * CELL_SIZE;
+		final int y = cell.y() * CELL_SIZE;
+		g.translate(x, y);
+		try {
+			g.setPaint(shading);
+			g.fillRoundRect(1, 1, CELL_SIZE - 2, CELL_SIZE - 2, 4, 4);
+			g.setColor(outline);
+			g.drawRoundRect(1, 1, CELL_SIZE - 3, CELL_SIZE - 3, 4, 4);
+		} finally {
+			g.translate(-x, -y);
+		}
+	}
+
 	private static void paintApple(final Graphics2D g, final Position apple) {
 		final int x = apple.x() * CELL_SIZE;
 		final int y = apple.y() * CELL_SIZE;
-		g.setPaint(shading(x, y, APPLE_COLOR));
-		g.fillOval(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2);
-		g.setColor(blend(APPLE_COLOR, Color.BLACK, 0.55f));
-		g.drawOval(x + 1, y + 1, CELL_SIZE - 3, CELL_SIZE - 3);
-		g.setColor(GLINT_COLOR);
-		g.fillOval(x + 3, y + 3, 2, 2);
+		g.translate(x, y);
+		try {
+			g.setPaint(APPLE_SHADING);
+			g.fillOval(1, 1, CELL_SIZE - 2, CELL_SIZE - 2);
+			g.setColor(APPLE_OUTLINE);
+			g.drawOval(1, 1, CELL_SIZE - 3, CELL_SIZE - 3);
+			g.setColor(GLINT_COLOR);
+			g.fillOval(3, 3, 2, 2);
+		} finally {
+			g.translate(-x, -y);
+		}
 	}
 
-	/** Radial shading lit from the top-left, which gives a cell a rounded, raised look. */
-	private static RadialGradientPaint shading(final int x, final int y, final Color base) {
+	/** Radial shading of one cell at the origin, lit from the top-left for a rounded, raised look. */
+	private static RadialGradientPaint cellShading(final Color base) {
 		return new RadialGradientPaint(
-				new Point2D.Float(x + CELL_SIZE / 2f, y + CELL_SIZE / 2f), CELL_SIZE * 0.6f,
-				new Point2D.Float(x + CELL_SIZE * 0.35f, y + CELL_SIZE * 0.35f), SHADE_STOPS,
+				new Point2D.Float(CELL_SIZE / 2f, CELL_SIZE / 2f), CELL_SIZE * 0.6f,
+				new Point2D.Float(CELL_SIZE * 0.35f, CELL_SIZE * 0.35f), SHADE_STOPS,
 				new Color[] { blend(base, Color.WHITE, 0.45f), base, blend(base, Color.BLACK, 0.45f) },
 				MultipleGradientPaint.CycleMethod.NO_CYCLE);
 	}
@@ -146,38 +168,51 @@ final class BoardPainter {
 				Math.round(from.getBlue() + (to.getBlue() - from.getBlue()) * amount));
 	}
 
+	/**
+	 * Draws the eight neighbouring copies of the board around it. A side
+	 * neighbour is reached by crossing one edge; a corner neighbour by
+	 * crossing one edge of each pair, so it combines both gluings (on the
+	 * projective plane, two reflections make a half turn). A neighbour
+	 * beyond a wall is drawn as solid wall margin instead.
+	 */
 	private void paintNeighbours(final Graphics2D graphics, final Topology topology) {
-		paintNeighbour(graphics, topology.horizontal(),
-				new Rectangle(BOARD_X - MARGIN, BOARD_Y, MARGIN, BOARD_HEIGHT), BOARD_X - BOARD_WIDTH, BOARD_Y, true);
-		paintNeighbour(graphics, topology.horizontal(),
-				new Rectangle(BOARD_X + BOARD_WIDTH, BOARD_Y, MARGIN, BOARD_HEIGHT), BOARD_X + BOARD_WIDTH, BOARD_Y, true);
-		paintNeighbour(graphics, topology.vertical(),
-				new Rectangle(BOARD_X, BOARD_Y - MARGIN, BOARD_WIDTH, MARGIN), BOARD_X, BOARD_Y - BOARD_HEIGHT, false);
-		paintNeighbour(graphics, topology.vertical(),
-				new Rectangle(BOARD_X, BOARD_Y + BOARD_HEIGHT, BOARD_WIDTH, MARGIN), BOARD_X, BOARD_Y + BOARD_HEIGHT, false);
+		for (int column = -1; column <= 1; column++)
+			for (int row = -1; row <= 1; row++) {
+				if (column == 0 && row == 0)
+					continue;
+				final Rectangle strip = new Rectangle(
+						column == 0 ? BOARD_X : column < 0 ? BOARD_X - MARGIN : BOARD_X + BOARD_WIDTH,
+						row == 0 ? BOARD_Y : row < 0 ? BOARD_Y - MARGIN : BOARD_Y + BOARD_HEIGHT,
+						column == 0 ? BOARD_WIDTH : MARGIN,
+						row == 0 ? BOARD_HEIGHT : MARGIN);
+				final Gluing acrossX = column == 0 ? Gluing.WRAP : topology.horizontal();
+				final Gluing acrossY = row == 0 ? Gluing.WRAP : topology.vertical();
+				if (acrossX == Gluing.WALL || acrossY == Gluing.WALL) {
+					graphics.setColor(WALL_MARGIN_COLOR);
+					graphics.fill(strip);
+				} else {
+					paintNeighbour(graphics, strip, BOARD_X + column * BOARD_WIDTH, BOARD_Y + row * BOARD_HEIGHT,
+							acrossX == Gluing.FLIP, acrossY == Gluing.FLIP);
+				}
+			}
 	}
 
 	/**
-	 * Draws the neighbouring copy of the board whose corner sits at
-	 * (tileX, tileY), clipped to the given margin strip. A flipped gluing
-	 * mirrors the copy across the axis of the crossed edge.
+	 * Draws the copy of the board whose corner sits at (tileX, tileY),
+	 * clipped to the given margin strip. Crossing a flipped left or right
+	 * edge mirrors the copy top to bottom; crossing a flipped top or bottom
+	 * edge mirrors it left to right. The two reflections commute.
 	 */
-	private void paintNeighbour(final Graphics2D graphics, final Gluing gluing, final Rectangle strip,
-			final int tileX, final int tileY, final boolean sideEdge) {
-		if (gluing == Gluing.WALL) {
-			graphics.setColor(WALL_MARGIN_COLOR);
-			graphics.fill(strip);
-			return;
-		}
+	private void paintNeighbour(final Graphics2D graphics, final Rectangle strip, final int tileX, final int tileY,
+			final boolean mirrorRows, final boolean mirrorColumns) {
 		final AffineTransform transform = AffineTransform.getTranslateInstance(tileX, tileY);
-		if (gluing == Gluing.FLIP) {
-			if (sideEdge) {
-				transform.translate(0, BOARD_HEIGHT);
-				transform.scale(1, -1);
-			} else {
-				transform.translate(BOARD_WIDTH, 0);
-				transform.scale(-1, 1);
-			}
+		if (mirrorRows) {
+			transform.translate(0, BOARD_HEIGHT);
+			transform.scale(1, -1);
+		}
+		if (mirrorColumns) {
+			transform.translate(BOARD_WIDTH, 0);
+			transform.scale(-1, 1);
 		}
 		final Graphics2D g = (Graphics2D) graphics.create();
 		try {
@@ -227,10 +262,15 @@ final class BoardPainter {
 	}
 
 	private static void paintEndMessage(final Graphics2D graphics, final String text, final Color color) {
-		graphics.setFont(END_FONT);
-		graphics.setColor(color);
-		final FontMetrics metrics = graphics.getFontMetrics();
-		graphics.drawString(text, BOARD_X + (BOARD_WIDTH - metrics.stringWidth(text)) / 2,
-				BOARD_Y + BOARD_HEIGHT / 2);
+		final Graphics2D g = (Graphics2D) graphics.create();
+		try {
+			g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+			g.setFont(END_FONT);
+			g.setColor(color);
+			final FontMetrics metrics = g.getFontMetrics();
+			g.drawString(text, BOARD_X + (BOARD_WIDTH - metrics.stringWidth(text)) / 2, BOARD_Y + BOARD_HEIGHT / 2);
+		} finally {
+			g.dispose();
+		}
 	}
 }
