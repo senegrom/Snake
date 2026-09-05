@@ -1,6 +1,9 @@
 package snake.gui;
 
 import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.util.List;
@@ -32,6 +35,8 @@ final class SnakeField extends JPanel {
 	static final String ERROR_PROPERTY = "gameError";
 	static final String FINISHED_PROPERTY = "gameFinished";
 	static final String POINTS_PROPERTY = "points";
+	static final String STATUS_PROPERTY = "status";
+	static final List<Integer> ZOOM_LEVELS = List.of(100, 150, 200);
 	static final String TIME_PROPERTY = "elapsedSeconds";
 
 	private static final List<Position> BOARD_CELLS = IntStream.range(0, CELL_COUNT)
@@ -55,6 +60,7 @@ final class SnakeField extends JPanel {
 	private Status status = Status.READY;
 	private Topology topology = Topology.PLANE;
 	private boolean won;
+	private int zoom = 100;
 
 	SnakeField() {
 		this(new Snake(Direction.RIGHT, DEFAULT_BODY));
@@ -76,7 +82,16 @@ final class SnakeField extends JPanel {
 		startLength = snake.length();
 
 		setBackground(BoardPainter.MARGIN_COLOR);
-		setPreferredSize(BoardPainter.PANEL_SIZE);
+		setPreferredSize(new Dimension(BoardPainter.PANEL_SIZE));
+		setFocusable(true);
+		getAccessibleContext().setAccessibleName("Snake board");
+		getAccessibleContext().setAccessibleDescription("Arrow keys steer; Space pauses or resumes.");
+		addMouseListener(new MouseAdapter() {
+			@Override
+			public void mousePressed(final MouseEvent event) {
+				requestFocusInWindow();
+			}
+		});
 
 		moveTimer = new Timer(MOVE_DELAYS_MS.get(DEFAULT_SPEED - 1), event -> onTimerTick());
 	}
@@ -91,7 +106,11 @@ final class SnakeField extends JPanel {
 	}
 
 	boolean requestDirection(final Direction direction) {
-		return status != Status.FINISHED && snake.requestDirection(direction);
+		final Direction previous = snake.direction();
+		final boolean accepted = status != Status.FINISHED && snake.requestDirection(direction);
+		if (accepted && previous != snake.direction())
+			repaint();
+		return accepted;
 	}
 
 	Snake snake() {
@@ -126,17 +145,17 @@ final class SnakeField extends JPanel {
 	void startGame() {
 		if (status != Status.READY)
 			throw new IllegalStateException("The game can only be started once");
-		status = Status.RUNNING;
 		runStartedNanos = nanoTime.getAsLong();
 		moveTimer.start();
+		setStatus(Status.RUNNING);
 	}
 
 	boolean pauseGame() {
 		if (status != Status.RUNNING)
 			return false;
 		captureElapsedTime();
-		status = Status.PAUSED;
 		moveTimer.stop();
+		setStatus(Status.PAUSED);
 		updateElapsedDisplay();
 		return true;
 	}
@@ -144,9 +163,9 @@ final class SnakeField extends JPanel {
 	boolean resumeGame() {
 		if (status != Status.PAUSED)
 			return false;
-		status = Status.RUNNING;
 		runStartedNanos = nanoTime.getAsLong();
 		moveTimer.start();
+		setStatus(Status.RUNNING);
 		return true;
 	}
 
@@ -159,7 +178,7 @@ final class SnakeField extends JPanel {
 		if (status == Status.RUNNING)
 			captureElapsedTime();
 		moveTimer.stop();
-		status = Status.FINISHED;
+		setStatus(Status.FINISHED);
 	}
 
 	/** Performs exactly one deterministic game step for the timer and tests. */
@@ -211,11 +230,51 @@ final class SnakeField extends JPanel {
 		repaint();
 	}
 
+	int zoom() {
+		return zoom;
+	}
+
+	/** Changes only the view; game coordinates and the timer are unaffected. */
+	void setZoom(final int percent) {
+		if (!ZOOM_LEVELS.contains(percent))
+			throw new IllegalArgumentException("Unsupported zoom: " + percent);
+		zoom = percent;
+		setPreferredSize(new Dimension(BoardPainter.PANEL_SIZE.width * percent / 100,
+				BoardPainter.PANEL_SIZE.height * percent / 100));
+		revalidate();
+		repaint();
+	}
+
+	String overlayMessage() {
+		return switch (status) {
+		case READY -> "Ready";
+		case PAUSED -> "Paused";
+		case RUNNING -> null;
+		case FINISHED -> endMessage();
+		};
+	}
+
+	private void setStatus(final Status next) {
+		final Status previous = status;
+		status = next;
+		if (previous != next) {
+			firePropertyChange(STATUS_PROPERTY, previous, next);
+			repaint();
+		}
+	}
+
 	@Override
 	protected void paintComponent(final Graphics graphics) {
 		super.paintComponent(graphics);
-		painter.paint((Graphics2D) graphics, getWidth(), getHeight(), snake, apple, topology,
-				status == Status.FINISHED ? endMessage() : null, endMessageColor());
+		final Graphics2D g = (Graphics2D) graphics.create();
+		try {
+			g.scale(zoom / 100.0, zoom / 100.0);
+			painter.paint(g, BoardPainter.PANEL_SIZE.width, BoardPainter.PANEL_SIZE.height,
+					snake, apple, topology, overlayMessage(),
+					status == Status.FINISHED ? endMessageColor() : Color.DARK_GRAY, status == Status.FINISHED);
+		} finally {
+			g.dispose();
+		}
 	}
 
 	private void abortGame(final RuntimeException cause) {
@@ -230,8 +289,8 @@ final class SnakeField extends JPanel {
 	private void endGame() {
 		if (status == Status.RUNNING)
 			captureElapsedTime();
-		status = Status.FINISHED;
 		moveTimer.stop();
+		setStatus(Status.FINISHED);
 		updateElapsedDisplay();
 		firePropertyChange(FINISHED_PROPERTY, false, true);
 		repaint();

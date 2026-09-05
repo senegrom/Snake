@@ -55,6 +55,7 @@ final class BoardPainter {
 	static final Color WIN_COLOR = new Color(0, 128, 0);
 	static final Color WRAP_EDGE_COLOR = new Color(112, 112, 112);
 	static final Font END_FONT = new Font("Verdana", Font.BOLD, 40);
+	private static final Font STATUS_FONT = new Font("Dialog", Font.BOLD, 18);
 
 	private static final int STRIPE_PERIOD = 12;
 	private static final float[] SHADE_STOPS = { 0f, 0.6f, 1f };
@@ -71,7 +72,7 @@ final class BoardPainter {
 	private static final Color HEAD_OUTLINE = blend(HEAD_COLOR, Color.BLACK, 0.6f);
 	private static final Color SNAKE_OUTLINE = blend(SNAKE_COLOR, Color.BLACK, 0.6f);
 
-	private final BufferedImage board = new BufferedImage(BOARD_WIDTH, BOARD_HEIGHT, BufferedImage.TYPE_INT_RGB);
+	private BufferedImage board = new BufferedImage(BOARD_WIDTH, BOARD_HEIGHT, BufferedImage.TYPE_INT_RGB);
 
 	/** Pixel centre of a board cell in panel coordinates. */
 	static Point cellCenter(final Position cell) {
@@ -80,20 +81,33 @@ final class BoardPainter {
 	}
 
 	void paint(final Graphics2D graphics, final int width, final int height, final Snake snake,
-			final Position apple, final Topology topology, final String endMessage, final Color endColor) {
+			final Position apple, final Topology topology, final String endMessage, final Color endColor,
+			final boolean terminal) {
+		resizeBuffer(graphics);
 		renderBoard(snake, apple);
 		graphics.setColor(MARGIN_COLOR);
 		graphics.fillRect(0, 0, width, height);
 		paintNeighbours(graphics, topology);
-		graphics.drawImage(board, BOARD_X, BOARD_Y, null);
+		graphics.drawImage(board, BOARD_X, BOARD_Y, BOARD_WIDTH, BOARD_HEIGHT, null);
 		paintEdges(graphics, topology);
 		if (endMessage != null)
-			paintEndMessage(graphics, endMessage, endColor);
+			paintOverlay(graphics, endMessage, endColor, terminal);
+	}
+
+	private void resizeBuffer(final Graphics2D graphics) {
+		final AffineTransform transform = graphics.getTransform();
+		final int width = Math.max(1, (int) Math.ceil(BOARD_WIDTH
+				* Math.hypot(transform.getScaleX(), transform.getShearY())));
+		final int height = Math.max(1, (int) Math.ceil(BOARD_HEIGHT
+				* Math.hypot(transform.getScaleY(), transform.getShearX())));
+		if (board.getWidth() != width || board.getHeight() != height)
+			board = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
 	}
 
 	private void renderBoard(final Snake snake, final Position apple) {
 		final Graphics2D g = board.createGraphics();
 		try {
+			g.scale(board.getWidth() / (double) BOARD_WIDTH, board.getHeight() / (double) BOARD_HEIGHT);
 			g.setPaint(SHADING);
 			g.fillRect(0, 0, BOARD_WIDTH, BOARD_HEIGHT);
 			g.setColor(STRIPE_COLOR);
@@ -214,6 +228,7 @@ final class BoardPainter {
 			transform.translate(BOARD_WIDTH, 0);
 			transform.scale(-1, 1);
 		}
+		transform.scale(BOARD_WIDTH / (double) board.getWidth(), BOARD_HEIGHT / (double) board.getHeight());
 		final Graphics2D g = (Graphics2D) graphics.create();
 		try {
 			g.clip(strip);
@@ -261,14 +276,23 @@ final class BoardPainter {
 		}
 	}
 
-	private static void paintEndMessage(final Graphics2D graphics, final String text, final Color color) {
+	private static void paintOverlay(final Graphics2D graphics, final String text, final Color color,
+			final boolean terminal) {
 		final Graphics2D g = (Graphics2D) graphics.create();
 		try {
 			g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-			g.setFont(END_FONT);
-			g.setColor(color);
+			g.setFont(terminal ? END_FONT : STATUS_FONT);
 			final FontMetrics metrics = g.getFontMetrics();
-			g.drawString(text, BOARD_X + (BOARD_WIDTH - metrics.stringWidth(text)) / 2, BOARD_Y + BOARD_HEIGHT / 2);
+			final int textWidth = metrics.stringWidth(text);
+			final int x = BOARD_X + (BOARD_WIDTH - textWidth) / 2;
+			// Non-terminal banners stay in the margin, so paused turns remain visible.
+			final int baseline = terminal ? BOARD_Y + BOARD_HEIGHT / 2
+					: BOARD_Y / 2 + (metrics.getAscent() - metrics.getDescent()) / 2;
+			g.setColor(new Color(255, 255, 255, 225));
+			g.fillRoundRect(x - 12, baseline - metrics.getAscent() - 8,
+					textWidth + 24, metrics.getHeight() + 16, 14, 14);
+			g.setColor(color);
+			g.drawString(text, x, baseline);
 		} finally {
 			g.dispose();
 		}

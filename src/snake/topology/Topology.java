@@ -57,6 +57,20 @@ public record Topology(Gluing horizontal, Gluing vertical) {
 		};
 	}
 
+	/** Describes the actual edge rules, including rotated variants. */
+	public String description() {
+		return "Left/right edges " + describe(horizontal, "rows")
+				+ "; top/bottom edges " + describe(vertical, "columns") + ".";
+	}
+
+	private static String describe(final Gluing gluing, final String reflectedAxis) {
+		return switch (gluing) {
+		case WALL -> "are walls";
+		case WRAP -> "wrap normally";
+		case FLIP -> "wrap and reflect " + reflectedAxis;
+		};
+	}
+
 	/** The surface's conventional name; rotated variants share it. */
 	@Override
 	public String toString() {

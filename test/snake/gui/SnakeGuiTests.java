@@ -112,6 +112,13 @@ public final class SnakeGuiTests {
 		check(action != null, "key has a window action: " + keyCode);
 		if (action != null)
 			action.actionPerformed(new ActionEvent(frame, ActionEvent.ACTION_PERFORMED, actionKey.toString()));
+		// A simulated tap must release one-shot shortcuts before the next tap.
+		final Object releaseKey = frame.getRootPane()
+				.getInputMap(javax.swing.JComponent.WHEN_IN_FOCUSED_WINDOW)
+				.get(KeyStroke.getKeyStroke(keyCode, 0, true));
+		final Action release = releaseKey == null ? null : frame.getRootPane().getActionMap().get(releaseKey);
+		if (release != null)
+			release.actionPerformed(new ActionEvent(frame, ActionEvent.ACTION_PERFORMED, releaseKey.toString()));
 	}
 
 	private static JFrame visibleSnakeFrame() {

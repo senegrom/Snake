@@ -50,6 +50,11 @@ jobs:
         run: |
           java -ea -Djava.awt.headless=true -cp out snake.gui.SnakeTests
           java -ea -Djava.awt.headless=true -cp out snake.gui.SnakeSmokeTests
+          java -ea -Djava.awt.headless=true -cp out snake.gui.SnakeInteractionTests
 
       - name: Run GUI smoke tests
         run: xvfb-run -a java -ea -Djava.awt.headless=false -cp out snake.gui.SnakeGuiTests
+
+      - name: Run real keyboard, focus and timer integration tests
+        timeout-minutes: 2
+        run: xvfb-run -a -s '-screen 0 1280x1024x24' java -ea -Djava.awt.headless=false -cp out snake.gui.SnakeInputTests
