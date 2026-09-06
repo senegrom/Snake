@@ -23,6 +23,7 @@ if [[ "$mode" == small ]]; then
   java -ea -Djava.awt.headless=false -Dsun.java2d.uiScale=2 -cp out snake.gui.SnakeFocusLayoutTests small-layout
   java -ea -Djava.awt.headless=false -Dsun.java2d.uiScale=2 -cp out snake.gui.SnakeViewportTests small
 else
+  java -ea -Djava.awt.headless=false -cp out snake.gui.ShortcutTrackerTests
   java -ea -Djava.awt.headless=false -cp out snake.gui.SnakeFocusLayoutTests
   java -ea -Djava.awt.headless=false -cp out snake.gui.SnakeViewportTests
 fi

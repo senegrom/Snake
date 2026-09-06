@@ -19,7 +19,8 @@ import javax.swing.KeyStroke;
  * still held cannot act again; if the outside release was never delivered,
  * one tap clears the latch. Releases are tracked in every window of the
  * application, but presses are only suppressed while the game window is
- * focused.
+ * focused. Repeated presses are stopped before they reach a different
+ * focused control; a fresh control press still receives its normal release.
  */
 final class ShortcutTracker {
 	private final Window window;
@@ -36,16 +37,19 @@ final class ShortcutTracker {
 		if (shortcut == null)
 			return false;
 		if (event.getID() == KeyEvent.KEY_RELEASED) {
-			final boolean blocked = shortcut.blockedUntilRelease;
+			// An action already handled on press must not also activate a button on release.
+			final boolean blocked = shortcut.pressed || shortcut.blockedUntilRelease;
 			shortcut.release();
 			if (blocked && window.isFocused()) {
 				event.consume();
 				return true;
 			}
 		} else if (event.getID() == KeyEvent.KEY_PRESSED && window.isFocused()) {
-			// Track even keys handled by focused controls rather than the ActionMap.
+			// Suppress repeats before Swing can route them to a newly focused control,
+			// even if the original press was handled by a button instead of our action.
+			final boolean repeated = shortcut.keyDown;
 			shortcut.keyDown = true;
-			if (shortcut.blockedUntilRelease) {
+			if (repeated || shortcut.blockedUntilRelease) {
 				event.consume();
 				return true;
 			}
