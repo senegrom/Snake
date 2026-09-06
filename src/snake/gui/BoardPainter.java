@@ -86,13 +86,11 @@ final class BoardPainter {
 				BOARD_Y + cell.y() * CELL_SIZE + CELL_SIZE / 2);
 	}
 
-	void paint(final Graphics2D graphics, final int width, final int height, final Snake snake,
-			final Position apple, final Topology topology, final String endMessage, final Color endColor,
-			final boolean terminal) {
+	/** Paints the board, its neighbours, edges and overlay onto a panel already filled with MARGIN_COLOR. */
+	void paint(final Graphics2D graphics, final Snake snake, final Position apple, final Topology topology,
+			final String endMessage, final Color endColor, final boolean terminal) {
 		resizeBuffer(graphics);
 		renderBoard(snake, apple);
-		graphics.setColor(MARGIN_COLOR);
-		graphics.fillRect(0, 0, width, height);
 		paintNeighbours(graphics, topology);
 		graphics.drawImage(board, BOARD_X, BOARD_Y, BOARD_WIDTH, BOARD_HEIGHT, null);
 		paintEdges(graphics, topology);

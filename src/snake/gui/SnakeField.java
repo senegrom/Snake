@@ -113,6 +113,7 @@ final class SnakeField extends JPanel {
 		return accepted;
 	}
 
+	/** The live model, for rendering and tests; play goes through step() and requestDirection(). */
 	Snake snake() {
 		return snake;
 	}
@@ -198,18 +199,16 @@ final class SnakeField extends JPanel {
 			return;
 		}
 		if (growing) {
+			// Publish the score before a finish, so a finish handler sees the final total
+			final int points = snake.length() - startLength;
+			firePropertyChange(POINTS_PROPERTY, points - 1, points);
 			if (snake.length() == CELL_COUNT) {
 				won = true;
 				apple = null;
 				endGame();
-			} else {
-				apple = spawnApple(snake);
+				return;
 			}
-		}
-
-		if (growing) {
-			final int points = snake.length() - startLength;
-			firePropertyChange(POINTS_PROPERTY, points - 1, points);
+			apple = spawnApple(snake);
 		}
 		repaint();
 	}
@@ -269,8 +268,7 @@ final class SnakeField extends JPanel {
 		final Graphics2D g = (Graphics2D) graphics.create();
 		try {
 			g.scale(zoom / 100.0, zoom / 100.0);
-			painter.paint(g, BoardPainter.PANEL_SIZE.width, BoardPainter.PANEL_SIZE.height,
-					snake, apple, topology, overlayMessage(),
+			painter.paint(g, snake, apple, topology, overlayMessage(),
 					status == Status.FINISHED ? endMessageColor() : Color.DARK_GRAY, status == Status.FINISHED);
 		} finally {
 			g.dispose();
@@ -278,6 +276,8 @@ final class SnakeField extends JPanel {
 	}
 
 	private void abortGame(final RuntimeException cause) {
+		// The error dialog shows only the message; keep the trace for diagnosis
+		cause.printStackTrace();
 		endGame();
 		firePropertyChange(ERROR_PROPERTY, null, cause);
 	}

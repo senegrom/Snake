@@ -16,7 +16,7 @@ public enum Direction {
 		return position.translate(deltaX, deltaY);
 	}
 
-	Direction opposite() {
+	public Direction opposite() {
 		return switch (this) {
 		case RIGHT -> LEFT;
 		case DOWN -> UP;

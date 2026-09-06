@@ -3,7 +3,9 @@ package snake.gui;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Frame;
+import java.awt.KeyboardFocusManager;
 import java.awt.event.ActionEvent;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.util.Arrays;
 import java.util.Objects;
@@ -74,6 +76,17 @@ public final class SnakeGuiTests {
 		invokeKey(originalFrame, KeyEvent.VK_SPACE);
 		equal(SnakeField.Status.PAUSED, field.status(), "window Space binding pauses");
 
+		// A shortcut fires once per physical press, and any release re-arms it,
+		// even one delivered while a mouse button is held
+		pressKey(originalFrame, KeyEvent.VK_SPACE);
+		equal(SnakeField.Status.RUNNING, field.status(), "a held shortcut fires once");
+		pressKey(originalFrame, KeyEvent.VK_SPACE);
+		equal(SnakeField.Status.RUNNING, field.status(), "auto-repeat while held does not fire again");
+		releaseKey(originalFrame, KeyEvent.VK_SPACE, InputEvent.BUTTON1_DOWN_MASK);
+		pressKey(originalFrame, KeyEvent.VK_SPACE);
+		equal(SnakeField.Status.PAUSED, field.status(), "a release with a mouse button held re-arms the shortcut");
+		releaseKey(originalFrame, KeyEvent.VK_SPACE, 0);
+
 		for (int steps = 0; field.status() != SnakeField.Status.FINISHED
 				&& steps <= SnakeField.BOARD_ROWS; steps++)
 			field.step();
@@ -104,7 +117,13 @@ public final class SnakeGuiTests {
 		originalFrame.dispose();
 	}
 
+	/** A tap: the window action for the key, then a plain release. */
 	private static void invokeKey(final JFrame frame, final int keyCode) {
+		pressKey(frame, keyCode);
+		releaseKey(frame, keyCode, 0);
+	}
+
+	private static void pressKey(final JFrame frame, final int keyCode) {
 		final KeyStroke keyStroke = KeyStroke.getKeyStroke(keyCode, 0);
 		final Object actionKey = frame.getRootPane()
 				.getInputMap(javax.swing.JComponent.WHEN_IN_FOCUSED_WINDOW).get(keyStroke);
@@ -112,13 +131,12 @@ public final class SnakeGuiTests {
 		check(action != null, "key has a window action: " + keyCode);
 		if (action != null)
 			action.actionPerformed(new ActionEvent(frame, ActionEvent.ACTION_PERFORMED, actionKey.toString()));
-		// A simulated tap must release one-shot shortcuts before the next tap.
-		final Object releaseKey = frame.getRootPane()
-				.getInputMap(javax.swing.JComponent.WHEN_IN_FOCUSED_WINDOW)
-				.get(KeyStroke.getKeyStroke(keyCode, 0, true));
-		final Action release = releaseKey == null ? null : frame.getRootPane().getActionMap().get(releaseKey);
-		if (release != null)
-			release.actionPerformed(new ActionEvent(frame, ActionEvent.ACTION_PERFORMED, releaseKey.toString()));
+	}
+
+	/** Delivers a key-release event with the given modifiers through the keyboard focus manager. */
+	private static void releaseKey(final JFrame frame, final int keyCode, final int modifiers) {
+		KeyboardFocusManager.getCurrentKeyboardFocusManager().dispatchEvent(new KeyEvent(frame,
+				KeyEvent.KEY_RELEASED, System.currentTimeMillis(), modifiers, keyCode, KeyEvent.CHAR_UNDEFINED));
 	}
 
 	private static JFrame visibleSnakeFrame() {
@@ -137,20 +155,23 @@ public final class SnakeGuiTests {
 
 	private static <T extends Component> T component(final Container root, final Class<T> type,
 			final Predicate<T> predicate) {
+		final T found = find(root, type, predicate);
+		if (found == null)
+			throw new AssertionError("Missing component: " + type.getSimpleName());
+		return found;
+	}
+
+	private static <T extends Component> T find(final Container root, final Class<T> type,
+			final Predicate<T> predicate) {
 		for (final Component child : root.getComponents()) {
-			if (type.isInstance(child)) {
-				final T typedChild = type.cast(child);
-				if (predicate.test(typedChild))
-					return typedChild;
-			}
+			if (type.isInstance(child) && predicate.test(type.cast(child)))
+				return type.cast(child);
 			if (child instanceof Container container) {
-				try {
-					return component(container, type, predicate);
-				} catch (final AssertionError ignored) {
-					// Continue searching sibling branches.
-				}
+				final T found = find(container, type, predicate);
+				if (found != null)
+					return found;
 			}
 		}
-		throw new AssertionError("Missing component: " + type.getSimpleName());
+		return null;
 	}
 }

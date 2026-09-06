@@ -1,13 +1,19 @@
 package snake.gui;
 
 import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import javax.swing.SwingUtilities;
+import snake.Direction;
+import snake.Position;
+import snake.Snake;
 
 /**
- * Shared assertion helpers for the suites. Failures are collected rather than
- * thrown, so one run reports every broken check; a suite that aborts with an
- * exception is reported as a failure as well.
+ * Shared assertion helpers and fixtures for the suites. Failures are collected
+ * rather than thrown, so one run reports every broken check; a suite that
+ * aborts with an exception is reported as a failure as well.
  */
 final class TestSupport {
 	@FunctionalInterface
@@ -15,10 +21,32 @@ final class TestSupport {
 		void run() throws Exception;
 	}
 
+	/** An apple position that no fixture snake occupies. */
+	static final Position SAFE_APPLE = new Position(10, 10);
+
 	private static int failed;
 	private static int passed;
 
 	private TestSupport() {
+	}
+
+	/** A fresh three-cell snake heading right along the top row, head at (2, 0). */
+	static Snake shortSnake() {
+		return new Snake(Direction.RIGHT, List.of(new Position(2, 0), new Position(1, 0), new Position(0, 0)));
+	}
+
+	/** Every board cell except the given free ones, with the head first. */
+	static List<Position> almostFullBody(final Position head, final Position... freePositions) {
+		final List<Position> free = Arrays.asList(freePositions);
+		final List<Position> body = new ArrayList<>(SnakeField.CELL_COUNT - free.size());
+		body.add(head);
+		for (int y = 0; y < SnakeField.BOARD_ROWS; y++)
+			for (int x = 0; x < SnakeField.BOARD_COLUMNS; x++) {
+				final Position position = new Position(x, y);
+				if (!position.equals(head) && !free.contains(position))
+					body.add(position);
+			}
+		return body;
 	}
 
 	/** Runs the suite body on the EDT, prints the summary and returns the process exit code. */

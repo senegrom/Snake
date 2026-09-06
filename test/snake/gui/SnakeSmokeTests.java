@@ -5,7 +5,6 @@ import java.awt.Dimension;
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.image.BufferedImage;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
@@ -15,9 +14,12 @@ import snake.Direction;
 import snake.Position;
 import snake.Snake;
 import snake.topology.Topology;
+import static snake.gui.TestSupport.SAFE_APPLE;
+import static snake.gui.TestSupport.almostFullBody;
 import static snake.gui.TestSupport.check;
 import static snake.gui.TestSupport.equal;
 import static snake.gui.TestSupport.expect;
+import static snake.gui.TestSupport.shortSnake;
 
 /** Targeted model, timing and headless-rendering smoke tests. */
 public final class SnakeSmokeTests {
@@ -39,8 +41,7 @@ public final class SnakeSmokeTests {
 	}
 
 	private static void testMovementInvariants() {
-		final Snake moving = new Snake(Direction.RIGHT,
-				List.of(new Position(2, 0), new Position(1, 0), new Position(0, 0)));
+		final Snake moving = shortSnake();
 		check(moving.advanceTo(new Position(3, 0), false), "ordinary movement succeeds");
 		equal(List.of(new Position(3, 0), new Position(2, 0), new Position(1, 0)),
 				List.copyOf(moving.body()), "ordinary movement removes the tail");
@@ -54,8 +55,7 @@ public final class SnakeSmokeTests {
 		equal(beforeCollision, List.copyOf(growingIntoTail.body()),
 				"a rejected tail-growth collision leaves the body unchanged");
 
-		final Snake turning = new Snake(Direction.RIGHT,
-				List.of(new Position(2, 0), new Position(1, 0), new Position(0, 0)));
+		final Snake turning = shortSnake();
 		check(turning.requestDirection(Direction.UP), "the first queued turn is accepted");
 		check(turning.requestDirection(Direction.DOWN),
 				"a queued turn may be revised before movement");
@@ -66,8 +66,7 @@ public final class SnakeSmokeTests {
 	}
 
 	private static void testValidationBoundaries() {
-		final Snake snake = new Snake(Direction.RIGHT,
-				List.of(new Position(2, 0), new Position(1, 0), new Position(0, 0)));
+		final Snake snake = shortSnake();
 		expect(IllegalArgumentException.class, () -> new SnakeField(snake,
 				new Position(SnakeField.BOARD_COLUMNS, 1)),
 				"apple at the exclusive right bound is rejected");
@@ -78,37 +77,25 @@ public final class SnakeSmokeTests {
 				"zero-column boards are rejected before mapping");
 		expect(IllegalArgumentException.class, () -> Topology.TORUS.map(new Position(0, 0), 1, 0),
 				"zero-row boards are rejected before mapping");
-		expect(NullPointerException.class, () -> new SnakeField(snake, new Position(10, 10), null),
+		expect(NullPointerException.class, () -> new SnakeField(snake, SAFE_APPLE, null),
 				"field rejects a null clock");
 	}
 
 	private static void testAppleSelection() {
-		final Snake snake = new Snake(Direction.RIGHT,
-				List.of(new Position(2, 0), new Position(1, 0), new Position(0, 0)));
-		final int freeCells = SnakeField.CELL_COUNT - snake.length();
-		final int selectedFreeCell = new Random(3).nextInt(freeCells);
-		equal(nthFreeCell(snake, selectedFreeCell), SnakeField.spawnApple(snake, new Random(3)),
-				"apple placement honours the supplied random selection");
+		final Snake snake = shortSnake();
+		// Random(3).nextInt(1268) draws 110. Counting free cells row by row past the
+		// three snake cells in row 0 (38 free cells there, 41 in row 1), index 110
+		// is column 31 of row 2.
+		equal(new Position(31, 2), SnakeField.spawnApple(snake, new Random(3)),
+				"apple placement selects the free cell at the drawn index");
 		expect(NullPointerException.class, () -> SnakeField.spawnApple(snake, null),
 				"apple placement rejects a null random source");
 	}
 
-	private static Position nthFreeCell(final Snake snake, final int selectedFreeCell) {
-		int remaining = selectedFreeCell;
-		for (int y = 0; y < SnakeField.BOARD_ROWS; y++)
-			for (int x = 0; x < SnakeField.BOARD_COLUMNS; x++) {
-				final Position candidate = new Position(x, y);
-				if (!snake.contains(candidate) && remaining-- == 0)
-					return candidate;
-			}
-		throw new AssertionError("selected free cell does not exist");
-	}
-
 	private static void testElapsedTime() {
 		final AtomicLong clock = new AtomicLong(1_000_000_000L);
-		final Snake snake = new Snake(Direction.RIGHT,
-				List.of(new Position(2, 0), new Position(1, 0), new Position(0, 0)));
-		final SnakeField field = new SnakeField(snake, new Position(10, 10), clock::get);
+		final Snake snake = shortSnake();
+		final SnakeField field = new SnakeField(snake, SAFE_APPLE, clock::get);
 		final EventRecorder events = new EventRecorder(field);
 		field.setMoveDelay(100_000);
 		field.startGame();
@@ -154,6 +141,8 @@ public final class SnakeSmokeTests {
 		final Snake eatingSnake = new Snake(Direction.RIGHT,
 				List.of(new Position(2, 1), new Position(1, 1), new Position(0, 1)));
 		final SnakeField eating = new SnakeField(eatingSnake, new Position(3, 1));
+		// Give the field a real size so its repaint request carries a non-empty region
+		eating.setSize(eating.getPreferredSize());
 		final EventRecorder eatingEvents = new EventRecorder(eating);
 
 		final RepaintManager originalManager = RepaintManager.currentManager(eating);
@@ -167,9 +156,7 @@ public final class SnakeSmokeTests {
 		equal(1, eatingEvents.points, "eating publishes the updated score");
 		check(repaintManager.dirtyRegions > 0, "a completed step requests repainting");
 
-		final SnakeField stopped = new SnakeField(new Snake(Direction.RIGHT,
-				List.of(new Position(2, 4), new Position(1, 4), new Position(0, 4))),
-				new Position(10, 10));
+		final SnakeField stopped = new SnakeField(shortSnake(), SAFE_APPLE);
 		stopped.shutdown();
 		final List<Position> stoppedBody = List.copyOf(stopped.snake().body());
 		stopped.step();
@@ -242,7 +229,7 @@ public final class SnakeSmokeTests {
 		final int sameColumn = BoardPainter.BOARD_X + 5 * BoardPainter.CELL_SIZE + BoardPainter.CELL_SIZE / 2;
 		final int mirroredColumn = BoardPainter.BOARD_X
 				+ (SnakeField.BOARD_COLUMNS - 1 - 5) * BoardPainter.CELL_SIZE + BoardPainter.CELL_SIZE / 2;
-		final SnakeField projective = new SnakeField(topSnake, new Position(10, 10));
+		final SnakeField projective = new SnakeField(topSnake, SAFE_APPLE);
 		projective.setTopology(Topology.PROJECTIVE_PLANE);
 		final BufferedImage projectiveImage = render(projective);
 		check(isBluish(projectiveImage.getRGB(mirroredColumn, ghostY)),
@@ -283,8 +270,8 @@ public final class SnakeSmokeTests {
 		check(finished.status() == SnakeField.Status.FINISHED,
 				"terminal field renders without changing state");
 		equal("Game Over", finished.endMessage(), "loss selects the game-over text");
-		equal(Color.RED, finished.endMessageColor(), "loss selects the red end color");
-		check(containsColor(endImage, Color.RED, endImage.getWidth() / 4, endImage.getHeight() / 3,
+		equal(BoardPainter.APPLE_COLOR, finished.endMessageColor(), "loss selects the apple red end colour");
+		check(containsColor(endImage, BoardPainter.APPLE_COLOR, endImage.getWidth() / 4, endImage.getHeight() / 3,
 				endImage.getWidth() * 3 / 4, endImage.getHeight() * 2 / 3),
 				"game-over overlay paints red in the board centre");
 
@@ -294,10 +281,9 @@ public final class SnakeSmokeTests {
 		final SnakeField winning = new SnakeField(winningSnake, winningApple);
 		winning.step();
 		equal("You Win!", winning.endMessage(), "win selects the winning text");
-		final Color winColor = new Color(0, 128, 0);
-		equal(winColor, winning.endMessageColor(), "win selects the green end color");
+		equal(BoardPainter.WIN_COLOR, winning.endMessageColor(), "win selects the green end colour");
 		final BufferedImage winImage = render(winning);
-		check(containsColor(winImage, winColor, winImage.getWidth() / 4, winImage.getHeight() / 3,
+		check(containsColor(winImage, BoardPainter.WIN_COLOR, winImage.getWidth() / 4, winImage.getHeight() / 3,
 				winImage.getWidth() * 3 / 4, winImage.getHeight() * 2 / 3),
 				"winning overlay paints green in the board centre");
 	}
@@ -331,23 +317,11 @@ public final class SnakeSmokeTests {
 		}
 	}
 
-	private static List<Position> almostFullBody(final Position head, final Position freeCell) {
-		final List<Position> body = new ArrayList<>(SnakeField.CELL_COUNT - 1);
-		body.add(head);
-		for (int y = 0; y < SnakeField.BOARD_ROWS; y++)
-			for (int x = 0; x < SnakeField.BOARD_COLUMNS; x++) {
-				final Position position = new Position(x, y);
-				if (!position.equals(head) && !position.equals(freeCell))
-					body.add(position);
-			}
-		return body;
-	}
-
 	/** A short snake lying along the left edge in row 5, on the given topology. */
 	private static SnakeField edgeField(final Topology topology) {
 		final Snake snake = new Snake(Direction.RIGHT,
 				List.of(new Position(2, 5), new Position(1, 5), new Position(0, 5)));
-		final SnakeField field = new SnakeField(snake, new Position(10, 10));
+		final SnakeField field = new SnakeField(snake, SAFE_APPLE);
 		field.setTopology(topology);
 		return field;
 	}
@@ -356,7 +330,7 @@ public final class SnakeSmokeTests {
 	private static SnakeField cornerField(final Topology topology) {
 		final Snake snake = new Snake(Direction.LEFT,
 				List.of(new Position(1, 1), new Position(2, 1), new Position(3, 1)));
-		final SnakeField field = new SnakeField(snake, new Position(10, 10));
+		final SnakeField field = new SnakeField(snake, SAFE_APPLE);
 		field.setTopology(topology);
 		return field;
 	}
@@ -367,25 +341,26 @@ public final class SnakeSmokeTests {
 
 	/** True for the faint blended echo of a blue snake cell, false for any grey or texture pixel. */
 	private static boolean isBluish(final int rgb) {
-		return (rgb & 0xFF) - ((rgb >> 16) & 0xFF) >= 60;
+		final Color color = new Color(rgb);
+		return color.getBlue() - color.getRed() >= 60;
 	}
 
 	private static boolean isReddish(final int rgb) {
-		final int red = (rgb >> 16) & 0xFF;
-		return red - ((rgb >> 8) & 0xFF) >= 60 && red - (rgb & 0xFF) >= 60;
+		final Color color = new Color(rgb);
+		return color.getRed() - color.getGreen() >= 60 && color.getRed() - color.getBlue() >= 60;
 	}
 
 	private static int brightness(final int rgb) {
-		return (rgb & 0xFF) + ((rgb >> 8) & 0xFF) + ((rgb >> 16) & 0xFF);
+		final Color color = new Color(rgb);
+		return color.getRed() + color.getGreen() + color.getBlue();
 	}
 
 	/** True for the near-white, neutral shades of an empty board cell. */
 	private static boolean isLightGrey(final int rgb) {
-		final int red = (rgb >> 16) & 0xFF;
-		final int green = (rgb >> 8) & 0xFF;
-		final int blue = rgb & 0xFF;
-		return Math.min(red, Math.min(green, blue)) >= 200
-				&& Math.max(red, Math.max(green, blue)) - Math.min(red, Math.min(green, blue)) <= 6;
+		final Color color = new Color(rgb);
+		final int darkest = Math.min(color.getRed(), Math.min(color.getGreen(), color.getBlue()));
+		final int lightest = Math.max(color.getRed(), Math.max(color.getGreen(), color.getBlue()));
+		return darkest >= 200 && lightest - darkest <= 6;
 	}
 
 	private static BufferedImage render(final SnakeField field) {

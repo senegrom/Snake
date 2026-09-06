@@ -10,6 +10,7 @@ import snake.Position;
 import snake.Snake;
 import snake.topology.Gluing;
 import snake.topology.Topology;
+import static snake.gui.TestSupport.almostFullBody;
 import static snake.gui.TestSupport.check;
 import static snake.gui.TestSupport.equal;
 import static snake.gui.TestSupport.expect;
@@ -36,20 +37,6 @@ public final class SnakeTests {
 		testFieldTopologiesAndInput();
 	}
 
-	private static List<Position> almostFullBody(final Position head, final Position... freePositions) {
-		final List<Position> free = Arrays.asList(freePositions);
-		final List<Position> body = new ArrayList<>(SnakeField.CELL_COUNT - free.size());
-		body.add(head);
-		for (int y = 0; y < SnakeField.BOARD_ROWS; y++) {
-			for (int x = 0; x < SnakeField.BOARD_COLUMNS; x++) {
-				final Position position = new Position(x, y);
-				if (!position.equals(head) && !free.contains(position))
-					body.add(position);
-			}
-		}
-		return body;
-	}
-
 	/** Every combination of edge gluings, including the rotated duplicates of the presets. */
 	private static List<Topology> allTopologies() {
 		final List<Topology> topologies = new ArrayList<>();
@@ -64,15 +51,6 @@ public final class SnakeTests {
 				&& position.y() >= 0 && position.y() < rows;
 	}
 
-	private static Direction opposite(final Direction direction) {
-		return switch (direction) {
-		case RIGHT -> Direction.LEFT;
-		case DOWN -> Direction.UP;
-		case LEFT -> Direction.RIGHT;
-		case UP -> Direction.DOWN;
-		};
-	}
-
 	private static Snake ringSnake(final Direction direction) {
 		return new Snake(direction,
 				List.of(new Position(0, 1), new Position(1, 1), new Position(1, 0), new Position(0, 0)));
@@ -84,9 +62,11 @@ public final class SnakeTests {
 		equal(2, position.y(), "record y accessor");
 		equal(new Position(1, 2), new Position(1, 2), "record value equality");
 
-		for (final Direction direction : Direction.values())
-			equal(position, opposite(direction).move(direction.move(position)),
+		for (final Direction direction : Direction.values()) {
+			equal(position, direction.opposite().move(direction.move(position)),
 					"opposite movement round trip for " + direction);
+			equal(direction, direction.opposite().opposite(), "opposite is an involution for " + direction);
+		}
 		equal(new Position(2, 2), Direction.RIGHT.move(position), "right movement");
 		equal(new Position(1, 3), Direction.DOWN.move(position), "down movement");
 		expect(NullPointerException.class, () -> Direction.UP.move(null),
@@ -184,7 +164,7 @@ public final class SnakeTests {
 									continue;
 								}
 								check(isInside(mapped, columns, rows), context + " maps inside the board");
-								final Position returned = topology.map(opposite(direction).move(mapped),
+								final Position returned = topology.map(direction.opposite().move(mapped),
 										columns, rows);
 								check(origin.equals(returned), context + " is reversible");
 							}
@@ -226,7 +206,7 @@ public final class SnakeTests {
 
 		for (final Direction direction : Direction.values()) {
 			final Snake directed = new Snake(direction, List.of(new Position(0, 0)));
-			check(!directed.requestDirection(opposite(direction)),
+			check(!directed.requestDirection(direction.opposite()),
 					"direct reversal is rejected for " + direction);
 		}
 

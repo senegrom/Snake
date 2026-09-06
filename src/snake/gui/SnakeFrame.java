@@ -6,6 +6,8 @@ import java.awt.FlowLayout;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Insets;
+import java.awt.KeyEventDispatcher;
+import java.awt.KeyboardFocusManager;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
 import java.awt.Window;
@@ -13,8 +15,8 @@ import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
 import javax.swing.BorderFactory;
@@ -49,7 +51,16 @@ public final class SnakeFrame {
 	private Runnable afterAboutFocus;
 	private final JPanel fieldWrapper = new JPanel(new GridBagLayout());
 	private final JFrame frame = new JFrame("Snake");
-	private final List<HeldKeyAction> heldKeys = new ArrayList<>();
+	private final Map<Integer, HeldKeyAction> heldKeys = new HashMap<>();
+	/** Re-arms a one-shot shortcut on any release of its key, whatever modifiers or mouse buttons are down. */
+	private final KeyEventDispatcher shortcutReleases = event -> {
+		if (event.getID() == KeyEvent.KEY_RELEASED) {
+			final HeldKeyAction shortcut = heldKeys.get(event.getKeyCode());
+			if (shortcut != null)
+				shortcut.release();
+		}
+		return false;
+	};
 	private final JButton pauseButton = new JButton("Pause");
 	private final JLabel pointsLabel = new JLabel("Points 0");
 	private final JButton restartButton = new JButton("Restart");
@@ -67,6 +78,7 @@ public final class SnakeFrame {
 		configureControls();
 		configureLayout();
 		bindGameKeys();
+		KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(shortcutReleases);
 		attachField(new SnakeField());
 
 		frame.addWindowFocusListener(new WindowAdapter() {
@@ -88,7 +100,8 @@ public final class SnakeFrame {
 
 			@Override
 			public void windowClosed(final WindowEvent event) {
-				heldKeys.forEach(HeldKeyAction::release);
+				KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(shortcutReleases);
+				heldKeys.values().forEach(HeldKeyAction::release);
 				field.shutdown();
 			}
 		});
@@ -166,21 +179,9 @@ public final class SnakeFrame {
 	private void bindOnce(final InputMap inputMap, final ActionMap actionMap, final int keyCode,
 			final String name, final Runnable runnable) {
 		final HeldKeyAction press = new HeldKeyAction(runnable);
-		heldKeys.add(press);
+		heldKeys.put(keyCode, press);
 		inputMap.put(KeyStroke.getKeyStroke(keyCode, 0, false), name);
-		// A modifier may be pressed while a shortcut is held. Its release must
-		// still re-arm the shortcut, regardless of the modifiers at release time.
-		final int[] modifiers = { KeyEvent.SHIFT_DOWN_MASK, KeyEvent.CTRL_DOWN_MASK,
-				KeyEvent.ALT_DOWN_MASK, KeyEvent.META_DOWN_MASK, KeyEvent.ALT_GRAPH_DOWN_MASK };
-		for (int subset = 0; subset < (1 << modifiers.length); subset++) {
-			int mask = 0;
-			for (int bit = 0; bit < modifiers.length; bit++)
-				if ((subset & (1 << bit)) != 0)
-					mask |= modifiers[bit];
-			inputMap.put(KeyStroke.getKeyStroke(keyCode, mask, true), name + "-release");
-		}
 		actionMap.put(name, press);
-		actionMap.put(name + "-release", action(press::release));
 	}
 
 	private void bindSteer(final InputMap inputMap, final ActionMap actionMap, final int keyCode,
@@ -295,7 +296,7 @@ public final class SnakeFrame {
 
 	private void pauseForFocusLoss() {
 		afterAboutFocus = null;
-		heldKeys.forEach(HeldKeyAction::release);
+		heldKeys.values().forEach(HeldKeyAction::release);
 		field.pauseGame();
 	}
 
@@ -369,15 +370,19 @@ public final class SnakeFrame {
 		field.requestFocusInWindow();
 	}
 
+	// Speed and topology are locked once a game starts; a stale change event
+	// must update only the labels rather than throw from inside a listener.
 	private void updateSpeed() {
 		final int speed = speedSlider.getValue();
 		speedLabel.setText(Integer.toString(speed));
-		field.setMoveDelay(SnakeField.MOVE_DELAYS_MS.get(speed - 1));
+		if (field.status() == SnakeField.Status.READY)
+			field.setMoveDelay(SnakeField.MOVE_DELAYS_MS.get(speed - 1));
 	}
 
 	private void updateTopology() {
 		final Topology topology = (Topology) topologyBox.getSelectedItem();
-		field.setTopology(topology);
+		if (field.status() == SnakeField.Status.READY)
+			field.setTopology(topology);
 		topologyDescription.setText("<html>" + topology.description() + "</html>");
 		topologyBox.setToolTipText(topology.description());
 	}
