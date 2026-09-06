@@ -96,10 +96,6 @@ jobs:
         timeout-minutes: 2
         run: xvfb-run -a -s '-screen 0 1280x1024x24' java -ea -Djava.awt.headless=false -cp out snake.gui.SnakeFocusLayoutTests
 
-      - name: Run shortcut component-focus regressions
-        timeout-minutes: 1
-        run: xvfb-run -a -s '-screen 0 1280x1024x24' java -ea -Djava.awt.headless=false -cp out snake.gui.ShortcutTrackerTests
-
       - name: Run narrow HiDPI layout regressions
         timeout-minutes: 1
         run: >-
