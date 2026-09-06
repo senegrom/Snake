@@ -13,6 +13,8 @@ import java.awt.Rectangle;
 import java.awt.Toolkit;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -33,6 +35,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSlider;
+import javax.swing.JToggleButton;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.UIManager;
@@ -43,14 +46,16 @@ import snake.topology.Topology;
 
 /** Main application window and entry point. */
 public final class SnakeFrame {
-	private static final String VERSION = "0.5.0";
+	private static final String VERSION = "0.6.0";
 	private static final String ABOUT_TEXT = "Snake " + VERSION + " by CGH.";
 
 	private final JButton aboutButton = new JButton("About");
 	private final JButton exitButton = new JButton("Exit");
 	private SnakeField field;
 	private Runnable afterAboutFocus;
-	private final JPanel fieldWrapper = new JPanel(new GridBagLayout());
+	private final JScrollPane boardScroll = new JScrollPane();
+	private final JPanel detailsPanel = new JPanel();
+	private final JToggleButton settingsToggle = new JToggleButton("Settings", true);
 	private final JFrame frame = new JFrame("Snake");
 	private final Map<Integer, HeldKeyAction> heldKeys = new HashMap<>();
 	/** Tracks releases in any application window, but suppresses held-key input only in this frame. */
@@ -119,10 +124,15 @@ public final class SnakeFrame {
 				field.shutdown();
 			}
 		});
+		frame.addComponentListener(new ComponentAdapter() {
+			@Override
+			public void componentResized(final ComponentEvent event) {
+				revealHead();
+			}
+		});
 		frame.setResizable(false);
 		frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 		packWindow();
-		frame.setLocationRelativeTo(null);
 		frame.setVisible(true);
 		startButton.requestFocusInWindow();
 	}
@@ -152,9 +162,9 @@ public final class SnakeFrame {
 		field.addPropertyChangeListener(SnakeField.STATUS_PROPERTY, event -> updateControls());
 		field.addPropertyChangeListener(SnakeField.ERROR_PROPERTY,
 				event -> showError((RuntimeException) event.getNewValue()));
-		fieldWrapper.add(field);
+		boardScroll.setViewportView(field);
 		field.setMoveDelay(SnakeField.MOVE_DELAYS_MS.get(speedSlider.getValue() - 1));
-		field.setZoom(SnakeField.ZOOM_LEVELS.get(zoomBox.getSelectedIndex()));
+		applyZoom();
 		updateTopology();
 		updateControls();
 	}
@@ -212,6 +222,16 @@ public final class SnakeFrame {
 		speedSlider.setName("speed");
 		topologyBox.setName("topology");
 		zoomBox.setName("zoom");
+		zoomBox.addItem("Fit");
+		zoomBox.setSelectedItem("Fit");
+		zoomBox.setToolTipText("Fit shows the whole board; fixed zoom may require scrolling");
+		settingsToggle.setName("settings");
+		settingsToggle.setToolTipText("Show or hide setup controls and help");
+		settingsToggle.addActionListener(event -> {
+			setSettingsVisible(settingsToggle.isSelected());
+			if (field.status() == SnakeField.Status.RUNNING)
+				field.requestFocusInWindow();
+		});
 		startButton.setToolTipText("Start a new game (F2)");
 		restartButton.setToolTipText("Reset the game, keeping settings (F3)");
 		pauseButton.setToolTipText("Pause or resume (Space on the board); Esc pauses");
@@ -223,7 +243,7 @@ public final class SnakeFrame {
 		speedSlider.addChangeListener(event -> updateSpeed());
 		topologyBox.addActionListener(event -> updateTopology());
 		zoomBox.addActionListener(event -> {
-			field.setZoom(SnakeField.ZOOM_LEVELS.get(zoomBox.getSelectedIndex()));
+			applyZoom();
 			packWindow();
 			if (field.status() == SnakeField.Status.RUNNING)
 				field.requestFocusInWindow();
@@ -252,7 +272,11 @@ public final class SnakeFrame {
 		speedControl.add(speedSlider, BorderLayout.CENTER);
 		addSetting(settings, 0, labelFor("Speed", speedSlider), speedControl);
 		addSetting(settings, 1, labelFor("Topology", topologyBox), topologyBox);
-		addSetting(settings, 2, labelFor("Zoom", zoomBox), zoomBox);
+		final JPanel zoomRow = new JPanel(new GridBagLayout());
+		final JPanel zoomControl = new JPanel(new BorderLayout(8, 0));
+		zoomControl.add(zoomBox, BorderLayout.CENTER);
+		zoomControl.add(settingsToggle, BorderLayout.EAST);
+		addSetting(zoomRow, 0, labelFor("Zoom", zoomBox), zoomControl);
 
 		final JPanel help = new JPanel(new GridLayout(0, 1, 0, 4));
 		help.add(topologyDescription);
@@ -263,10 +287,12 @@ public final class SnakeFrame {
 		controls.setLayout(new BoxLayout(controls, BoxLayout.Y_AXIS));
 		controls.add(buttonRow);
 		controls.add(statusRow);
-		controls.add(settings);
-		controls.add(help);
+		detailsPanel.setLayout(new BoxLayout(detailsPanel, BoxLayout.Y_AXIS));
+		detailsPanel.add(settings);
+		detailsPanel.add(help);
+		controls.add(detailsPanel);
+		controls.add(zoomRow);
 
-		final JScrollPane boardScroll = new JScrollPane(fieldWrapper);
 		boardScroll.setBorder(BorderFactory.createEmptyBorder());
 		boardScroll.getVerticalScrollBar().setUnitIncrement(20);
 		boardScroll.getHorizontalScrollBar().setUnitIncrement(20);
@@ -299,7 +325,8 @@ public final class SnakeFrame {
 
 	/** Keeps the enlarged board reachable even on a small display. */
 	private void packWindow() {
-		if (!frame.isDisplayable())
+		final boolean initial = !frame.isDisplayable();
+		if (initial)
 			frame.addNotify();
 		final Dimension preferred = frame.getPreferredSize();
 		final Rectangle screen = frame.getGraphicsConfiguration().getBounds();
@@ -310,22 +337,57 @@ public final class SnakeFrame {
 		final int height = screen.height - insets.top - insets.bottom;
 		// Do not pack to an oversized native window and then shrink it: delayed
 		// native configure events can restore that intermediate size on HiDPI X11.
-		frame.setSize(Math.min(preferred.width, width), Math.min(preferred.height, height));
-		frame.validate();
-		frame.setLocation(Math.max(left, Math.min(frame.getX(), left + width - frame.getWidth())),
-				Math.max(top, Math.min(frame.getY(), top + height - frame.getHeight())));
+		final int targetWidth = Math.min(preferred.width, width);
+		final int targetHeight = Math.min(preferred.height, height);
+		final int x = initial ? left + (width - targetWidth) / 2
+				: Math.max(left, Math.min(frame.getX(), left + width - targetWidth));
+		final int y = initial ? top + (height - targetHeight) / 2
+				: Math.max(top, Math.min(frame.getY(), top + height - targetHeight));
+		// Native geometry settles asynchronously. Submit one complete request;
+		// never follow a resize with a move based on potentially stale dimensions.
+		frame.setBounds(x, y, targetWidth, targetHeight);
+		revealHead();
 	}
 
 	/** Replaces the field in place, keeping the window and all settings. */
 	private void restartGame() {
 		field.shutdown();
-		fieldWrapper.remove(field);
+		settingsToggle.setSelected(true);
+		detailsPanel.setVisible(true);
 		attachField(new SnakeField());
 		setPoints(0);
 		setTime(0);
-		fieldWrapper.revalidate();
-		fieldWrapper.repaint();
+		revealHead();
 		field.requestFocusInWindow();
+	}
+
+	private void applyZoom() {
+		final int index = zoomBox.getSelectedIndex();
+		if (index == SnakeField.ZOOM_LEVELS.size())
+			field.setFitToWindow(true);
+		else
+			field.setZoom(SnakeField.ZOOM_LEVELS.get(index));
+	}
+
+	private void setSettingsVisible(final boolean visible) {
+		settingsToggle.setSelected(visible);
+		detailsPanel.setVisible(visible);
+		revealHead();
+	}
+
+	/** Re-layout before scrolling; repeat after queued layout/native resize events. */
+	private void revealHead() {
+		if (field == null || !frame.isDisplayable())
+			return;
+		frame.validate();
+		field.scrollRectToVisible(field.headBounds());
+		final SnakeField current = field;
+		EventQueue.invokeLater(() -> {
+			if (frame.isDisplayable() && field == current) {
+				frame.validate();
+				current.scrollRectToVisible(current.headBounds());
+			}
+		});
 	}
 
 	private void showError(final RuntimeException cause) {
@@ -400,11 +462,14 @@ public final class SnakeFrame {
 	private void startGame() {
 		if (field.status() != SnakeField.Status.READY)
 			return;
+		setSettingsVisible(false);
+		revealHead();
 		field.startGame();
 		field.requestFocusInWindow();
 	}
 
 	private void togglePause() {
+		revealHead();
 		field.togglePause();
 		field.requestFocusInWindow();
 	}

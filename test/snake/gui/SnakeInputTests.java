@@ -94,6 +94,7 @@ public final class SnakeInputTests {
 		tabTo(zoom);
 		tap(KeyEvent.VK_SPACE);
 		tap(KeyEvent.VK_END);
+		tap(KeyEvent.VK_UP); // Fit follows the three fixed zoom choices.
 		tap(KeyEvent.VK_ENTER);
 		await(() -> field().zoom() == 200, "zoom chosen by keyboard");
 		check(edt(() -> frame.getHeight() <= frame.getGraphicsConfiguration().getBounds().height),

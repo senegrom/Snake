@@ -51,6 +51,7 @@ jobs:
           java -ea -Djava.awt.headless=true -cp out snake.gui.SnakeTests
           java -ea -Djava.awt.headless=true -cp out snake.gui.SnakeSmokeTests
           java -ea -Djava.awt.headless=true -cp out snake.gui.SnakeInteractionTests
+          java -ea -Djava.awt.headless=true -cp out snake.gui.SnakeViewportTests render
 
       - name: Run GUI smoke tests
         run: xvfb-run -a java -ea -Djava.awt.headless=false -cp out snake.gui.SnakeGuiTests
@@ -69,3 +70,14 @@ jobs:
           xvfb-run -a -s '-screen 0 1024x768x24'
           java -ea -Djava.awt.headless=false -Dsun.java2d.uiScale=2
           -cp out snake.gui.SnakeFocusLayoutTests small-layout
+
+      - name: Install window manager for native geometry regressions
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y openbox x11-utils
+
+      - name: Test managed-window resizing, Fit and scrolled restarts
+        timeout-minutes: 2
+        run: |
+          xvfb-run -a -s '-screen 0 1280x1024x24' bash test/run-managed-tests.sh normal
+          xvfb-run -a -s '-screen 0 1024x768x24' bash test/run-managed-tests.sh small

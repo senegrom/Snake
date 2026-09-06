@@ -6,6 +6,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Rectangle;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
@@ -13,6 +14,9 @@ import java.util.function.LongSupplier;
 import java.util.random.RandomGenerator;
 import java.util.stream.IntStream;
 import javax.swing.JPanel;
+import javax.swing.JViewport;
+import javax.swing.Scrollable;
+import javax.swing.SwingConstants;
 import javax.swing.Timer;
 import snake.Direction;
 import snake.Position;
@@ -21,7 +25,7 @@ import snake.topology.Topology;
 
 /** Game state, timer and renderer. All live mutation occurs on the Swing EDT. */
 @SuppressWarnings("serial")
-final class SnakeField extends JPanel {
+final class SnakeField extends JPanel implements Scrollable {
 	enum Status {
 		READY, RUNNING, PAUSED, FINISHED
 	}
@@ -61,6 +65,7 @@ final class SnakeField extends JPanel {
 	private Topology topology = Topology.PLANE;
 	private boolean won;
 	private int zoom = 100;
+	private boolean fitToWindow;
 
 	SnakeField() {
 		this(new Snake(Direction.RIGHT, DEFAULT_BODY));
@@ -238,10 +243,88 @@ final class SnakeField extends JPanel {
 		if (!ZOOM_LEVELS.contains(percent))
 			throw new IllegalArgumentException("Unsupported zoom: " + percent);
 		zoom = percent;
-		setPreferredSize(new Dimension(BoardPainter.PANEL_SIZE.width * percent / 100,
-				BoardPainter.PANEL_SIZE.height * percent / 100));
+		fitToWindow = false;
+		updateViewSize();
+	}
+
+	boolean fitsWindow() {
+		return fitToWindow;
+	}
+
+	void setFitToWindow(final boolean fit) {
+		fitToWindow = fit;
+		updateViewSize();
+	}
+
+	private void updateViewSize() {
+		final int preferredZoom = fitToWindow ? 100 : zoom;
+		setPreferredSize(new Dimension(BoardPainter.PANEL_SIZE.width * preferredZoom / 100,
+				BoardPainter.PANEL_SIZE.height * preferredZoom / 100));
 		revalidate();
 		repaint();
+	}
+
+	/** Scale the whole board and its margins, never the game coordinates. */
+	double viewScale() {
+		return fitToWindow ? Math.min(Math.max(1, getWidth()) / (double) BoardPainter.PANEL_SIZE.width,
+				Math.max(1, getHeight()) / (double) BoardPainter.PANEL_SIZE.height) : zoom / 100.0;
+	}
+
+	private int viewX() {
+		return Math.max(0, (int) Math.floor((getWidth() - BoardPainter.PANEL_SIZE.width * viewScale()) / 2));
+	}
+
+	private int viewY() {
+		return Math.max(0, (int) Math.floor((getHeight() - BoardPainter.PANEL_SIZE.height * viewScale()) / 2));
+	}
+
+	/** Bounds in component coordinates, shared by scrolling and visibility tests. */
+	Rectangle headBounds() {
+		return viewBounds(BoardPainter.BOARD_X + snake.head().x() * BoardPainter.CELL_SIZE,
+				BoardPainter.BOARD_Y + snake.head().y() * BoardPainter.CELL_SIZE,
+				BoardPainter.CELL_SIZE, BoardPainter.CELL_SIZE);
+	}
+
+	Rectangle boardBounds() {
+		final int wall = BoardPainter.WALL_THICKNESS;
+		return viewBounds(BoardPainter.BOARD_X - wall, BoardPainter.BOARD_Y - wall,
+				BoardPainter.BOARD_WIDTH + 2 * wall, BoardPainter.BOARD_HEIGHT + 2 * wall);
+	}
+
+	private Rectangle viewBounds(final int x, final int y, final int width, final int height) {
+		final double scale = viewScale();
+		final int left = viewX() + (int) Math.floor(x * scale);
+		final int top = viewY() + (int) Math.floor(y * scale);
+		return new Rectangle(left, top, viewX() + (int) Math.ceil((x + width) * scale) - left,
+				viewY() + (int) Math.ceil((y + height) * scale) - top);
+	}
+
+	@Override
+	public Dimension getPreferredScrollableViewportSize() {
+		return getPreferredSize();
+	}
+
+	@Override
+	public boolean getScrollableTracksViewportWidth() {
+		return fitToWindow || getParent() instanceof JViewport viewport
+				&& viewport.getWidth() > getPreferredSize().width;
+	}
+
+	@Override
+	public boolean getScrollableTracksViewportHeight() {
+		return fitToWindow || getParent() instanceof JViewport viewport
+				&& viewport.getHeight() > getPreferredSize().height;
+	}
+
+	@Override
+	public int getScrollableUnitIncrement(final Rectangle visibleRect, final int orientation, final int direction) {
+		return Math.max(1, (int) Math.round(BoardPainter.CELL_SIZE * viewScale()));
+	}
+
+	@Override
+	public int getScrollableBlockIncrement(final Rectangle visibleRect, final int orientation, final int direction) {
+		final int extent = orientation == SwingConstants.HORIZONTAL ? visibleRect.width : visibleRect.height;
+		return Math.max(1, extent - getScrollableUnitIncrement(visibleRect, orientation, direction));
 	}
 
 	String overlayMessage() {
@@ -267,7 +350,8 @@ final class SnakeField extends JPanel {
 		super.paintComponent(graphics);
 		final Graphics2D g = (Graphics2D) graphics.create();
 		try {
-			g.scale(zoom / 100.0, zoom / 100.0);
+			g.translate(viewX(), viewY());
+			g.scale(viewScale(), viewScale());
 			painter.paint(g, snake, apple, topology, overlayMessage(),
 					status == Status.FINISHED ? endMessageColor() : Color.DARK_GRAY, status == Status.FINISHED);
 		} finally {

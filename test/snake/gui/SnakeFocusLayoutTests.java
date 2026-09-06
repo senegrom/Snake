@@ -249,6 +249,10 @@ public final class SnakeFocusLayoutTests {
 					combo("topology").setSelectedItem(topology);
 					combo("zoom").setSelectedIndex(index);
 					frame.validate();
+					return null;
+				});
+				awaitGeometry();
+				edt(() -> {
 					assertControlsVisible();
 					check(field().zoom() == SnakeField.ZOOM_LEVELS.get(index), "zoom applied without hiding settings");
 					return null;
@@ -264,7 +268,26 @@ public final class SnakeFocusLayoutTests {
 		tap(KeyEvent.VK_HOME);
 		tap(KeyEvent.VK_ENTER);
 		await(() -> field().zoom() == 100, "zoom is usable by keyboard on this display");
+		awaitGeometry();
 		edt(() -> { assertControlsVisible(); return null; });
+	}
+
+	/** Native move/resize events must settle before assertions about screen bounds. */
+	private void awaitGeometry() throws Exception {
+		final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+		Rectangle previous = null;
+		long stableSince = System.nanoTime();
+		while (System.nanoTime() < deadline) {
+			final Rectangle bounds = edt(frame::getBounds);
+			if (!bounds.equals(previous)) {
+				previous = bounds;
+				stableSince = System.nanoTime();
+			} else if (System.nanoTime() - stableSince >= TimeUnit.MILLISECONDS.toNanos(200)) {
+				return;
+			}
+			Thread.sleep(20);
+		}
+		throw new AssertionError("Window geometry did not settle");
 	}
 
 	/** Geometric clipping checks must inspect each control, not just the outer window. */
