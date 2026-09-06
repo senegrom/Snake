@@ -1,8 +1,9 @@
 package snake.gui;
 
 import java.awt.BorderLayout;
+import java.awt.Dimension;
 import java.awt.EventQueue;
-import java.awt.FlowLayout;
+import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Insets;
@@ -52,12 +53,25 @@ public final class SnakeFrame {
 	private final JPanel fieldWrapper = new JPanel(new GridBagLayout());
 	private final JFrame frame = new JFrame("Snake");
 	private final Map<Integer, HeldKeyAction> heldKeys = new HashMap<>();
-	/** Re-arms a one-shot shortcut on any release of its key, whatever modifiers or mouse buttons are down. */
-	private final KeyEventDispatcher shortcutReleases = event -> {
+	/** Tracks releases in any application window, but suppresses held-key input only in this frame. */
+	private final KeyEventDispatcher shortcutEvents = event -> {
+		final HeldKeyAction shortcut = heldKeys.get(event.getKeyCode());
+		if (shortcut == null)
+			return false;
 		if (event.getID() == KeyEvent.KEY_RELEASED) {
-			final HeldKeyAction shortcut = heldKeys.get(event.getKeyCode());
-			if (shortcut != null)
-				shortcut.release();
+			final boolean blocked = shortcut.blockedUntilRelease;
+			shortcut.release();
+			if (blocked && frame.isFocused()) {
+				event.consume();
+				return true;
+			}
+		} else if (event.getID() == KeyEvent.KEY_PRESSED && frame.isFocused()) {
+			// Track even keys handled by focused controls rather than our ActionMap.
+			shortcut.keyDown = true;
+			if (shortcut.blockedUntilRelease) {
+				event.consume();
+				return true;
+			}
 		}
 		return false;
 	};
@@ -78,7 +92,7 @@ public final class SnakeFrame {
 		configureControls();
 		configureLayout();
 		bindGameKeys();
-		KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(shortcutReleases);
+		KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(shortcutEvents);
 		attachField(new SnakeField());
 
 		frame.addWindowFocusListener(new WindowAdapter() {
@@ -100,7 +114,7 @@ public final class SnakeFrame {
 
 			@Override
 			public void windowClosed(final WindowEvent event) {
-				KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(shortcutReleases);
+				KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(shortcutEvents);
 				heldKeys.values().forEach(HeldKeyAction::release);
 				field.shutdown();
 			}
@@ -225,17 +239,20 @@ public final class SnakeFrame {
 		buttonRow.add(restartButton);
 		buttonRow.add(pauseButton);
 		buttonRow.add(aboutButton);
-		buttonRow.add(pointsLabel);
-		buttonRow.add(timeLabel);
+		// Status labels must not squeeze the five buttons into truncated captions.
+		final JPanel statusRow = new JPanel(new GridLayout(1, 2, 4, 0));
+		statusRow.add(pointsLabel);
+		statusRow.add(timeLabel);
 
-		final JPanel settingsRow = new JPanel(new FlowLayout(FlowLayout.LEFT));
-		settingsRow.add(labelFor("Speed", speedSlider));
-		settingsRow.add(speedLabel);
-		settingsRow.add(speedSlider);
-		settingsRow.add(labelFor("Topology", topologyBox));
-		settingsRow.add(topologyBox);
-		settingsRow.add(labelFor("Zoom", zoomBox));
-		settingsRow.add(zoomBox);
+		// Explicit rows have a height independent of the screen width. FlowLayout
+		// wrapped the zoom selector into a second line without reserving its height.
+		final JPanel settings = new JPanel(new GridBagLayout());
+		final JPanel speedControl = new JPanel(new BorderLayout(6, 0));
+		speedControl.add(speedLabel, BorderLayout.WEST);
+		speedControl.add(speedSlider, BorderLayout.CENTER);
+		addSetting(settings, 0, labelFor("Speed", speedSlider), speedControl);
+		addSetting(settings, 1, labelFor("Topology", topologyBox), topologyBox);
+		addSetting(settings, 2, labelFor("Zoom", zoomBox), zoomBox);
 
 		final JPanel help = new JPanel(new GridLayout(0, 1, 0, 4));
 		help.add(topologyDescription);
@@ -245,7 +262,8 @@ public final class SnakeFrame {
 		controls.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
 		controls.setLayout(new BoxLayout(controls, BoxLayout.Y_AXIS));
 		controls.add(buttonRow);
-		controls.add(settingsRow);
+		controls.add(statusRow);
+		controls.add(settings);
 		controls.add(help);
 
 		final JScrollPane boardScroll = new JScrollPane(fieldWrapper);
@@ -257,6 +275,21 @@ public final class SnakeFrame {
 		frame.add(boardScroll, BorderLayout.CENTER);
 	}
 
+	private static void addSetting(final JPanel settings, final int row, final JLabel label,
+			final JComponent control) {
+		final GridBagConstraints constraints = new GridBagConstraints();
+		constraints.gridy = row;
+		constraints.anchor = GridBagConstraints.LINE_START;
+		constraints.insets = new Insets(3, 0, 3, 8);
+		constraints.gridx = 0;
+		settings.add(label, constraints);
+		constraints.gridx = 1;
+		constraints.weightx = 1;
+		constraints.fill = GridBagConstraints.HORIZONTAL;
+		constraints.insets = new Insets(3, 0, 3, 0);
+		settings.add(control, constraints);
+	}
+
 	private static JLabel labelFor(final String text, final JComponent control) {
 		final JLabel label = new JLabel(text);
 		label.setLabelFor(control);
@@ -266,14 +299,19 @@ public final class SnakeFrame {
 
 	/** Keeps the enlarged board reachable even on a small display. */
 	private void packWindow() {
-		frame.pack();
+		if (!frame.isDisplayable())
+			frame.addNotify();
+		final Dimension preferred = frame.getPreferredSize();
 		final Rectangle screen = frame.getGraphicsConfiguration().getBounds();
 		final Insets insets = Toolkit.getDefaultToolkit().getScreenInsets(frame.getGraphicsConfiguration());
 		final int left = screen.x + insets.left;
 		final int top = screen.y + insets.top;
 		final int width = screen.width - insets.left - insets.right;
 		final int height = screen.height - insets.top - insets.bottom;
-		frame.setSize(Math.min(frame.getWidth(), width), Math.min(frame.getHeight(), height));
+		// Do not pack to an oversized native window and then shrink it: delayed
+		// native configure events can restore that intermediate size on HiDPI X11.
+		frame.setSize(Math.min(preferred.width, width), Math.min(preferred.height, height));
+		frame.validate();
 		frame.setLocation(Math.max(left, Math.min(frame.getX(), left + width - frame.getWidth())),
 				Math.max(top, Math.min(frame.getY(), top + height - frame.getHeight())));
 	}
@@ -296,7 +334,8 @@ public final class SnakeFrame {
 
 	private void pauseForFocusLoss() {
 		afterAboutFocus = null;
-		heldKeys.values().forEach(HeldKeyAction::release);
+		// Focus loss is not a key release: auto-repeat may continue when we return.
+		heldKeys.values().forEach(HeldKeyAction::focusLost);
 		field.pauseGame();
 	}
 
@@ -383,7 +422,7 @@ public final class SnakeFrame {
 		final Topology topology = (Topology) topologyBox.getSelectedItem();
 		if (field.status() == SnakeField.Status.READY)
 			field.setTopology(topology);
-		topologyDescription.setText("<html>" + topology.description() + "</html>");
+		topologyDescription.setText("<html>" + topology.description().replace("; ", ";<br>") + "</html>");
 		topologyBox.setToolTipText(topology.description());
 	}
 
@@ -392,6 +431,8 @@ public final class SnakeFrame {
 		private static final long serialVersionUID = 1L;
 		private final transient Runnable runnable;
 		private boolean pressed;
+		private boolean keyDown;
+		private boolean blockedUntilRelease;
 
 		HeldKeyAction(final Runnable runnable) {
 			this.runnable = runnable;
@@ -399,14 +440,23 @@ public final class SnakeFrame {
 
 		@Override
 		public void actionPerformed(final ActionEvent event) {
-			if (!pressed) {
+			keyDown = true;
+			if (!pressed && !blockedUntilRelease) {
 				pressed = true;
 				runnable.run();
 			}
 		}
 
+		void focusLost() {
+			// Only an observed release can re-arm this key. If an outside-app
+			// release was missed, the next tap's release safely clears the latch.
+			blockedUntilRelease |= keyDown;
+		}
+
 		void release() {
 			pressed = false;
+			keyDown = false;
+			blockedUntilRelease = false;
 		}
 	}
 

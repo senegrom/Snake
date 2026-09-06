@@ -58,3 +58,14 @@ jobs:
       - name: Run real keyboard, focus and timer integration tests
         timeout-minutes: 2
         run: xvfb-run -a -s '-screen 0 1280x1024x24' java -ea -Djava.awt.headless=false -cp out snake.gui.SnakeInputTests
+
+      - name: Run held-key focus-return and control visibility regressions
+        timeout-minutes: 2
+        run: xvfb-run -a -s '-screen 0 1280x1024x24' java -ea -Djava.awt.headless=false -cp out snake.gui.SnakeFocusLayoutTests
+
+      - name: Run narrow HiDPI layout regressions
+        timeout-minutes: 1
+        run: >-
+          xvfb-run -a -s '-screen 0 1024x768x24'
+          java -ea -Djava.awt.headless=false -Dsun.java2d.uiScale=2
+          -cp out snake.gui.SnakeFocusLayoutTests small-layout
