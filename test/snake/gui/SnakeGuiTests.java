@@ -1,15 +1,11 @@
 package snake.gui;
 
-import java.awt.Component;
 import java.awt.Container;
-import java.awt.Frame;
 import java.awt.KeyboardFocusManager;
 import java.awt.event.ActionEvent;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
-import java.util.Arrays;
 import java.util.Objects;
-import java.util.function.Predicate;
 import javax.swing.Action;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -20,6 +16,7 @@ import javax.swing.KeyStroke;
 import snake.Direction;
 import snake.topology.Topology;
 import static snake.gui.TestSupport.check;
+import static snake.gui.TestSupport.component;
 import static snake.gui.TestSupport.equal;
 
 /** End-to-end smoke tests for the real Swing window under a virtual display. */
@@ -140,38 +137,10 @@ public final class SnakeGuiTests {
 	}
 
 	private static JFrame visibleSnakeFrame() {
-		return Arrays.stream(Frame.getFrames())
-				.filter(JFrame.class::isInstance)
-				.map(JFrame.class::cast)
-				.filter(Frame::isVisible)
-				.filter(frame -> Objects.equals("Snake", frame.getTitle()))
-				.findFirst()
-				.orElseThrow(() -> new AssertionError("No visible Snake window"));
+		return Objects.requireNonNull(RobotSupport.gameFrame(), "No visible Snake window");
 	}
 
 	private static JButton button(final Container root, final String text) {
 		return component(root, JButton.class, button -> text.equals(button.getText()));
-	}
-
-	private static <T extends Component> T component(final Container root, final Class<T> type,
-			final Predicate<T> predicate) {
-		final T found = find(root, type, predicate);
-		if (found == null)
-			throw new AssertionError("Missing component: " + type.getSimpleName());
-		return found;
-	}
-
-	private static <T extends Component> T find(final Container root, final Class<T> type,
-			final Predicate<T> predicate) {
-		for (final Component child : root.getComponents()) {
-			if (type.isInstance(child) && predicate.test(type.cast(child)))
-				return type.cast(child);
-			if (child instanceof Container container) {
-				final T found = find(container, type, predicate);
-				if (found != null)
-					return found;
-			}
-		}
-		return null;
 	}
 }

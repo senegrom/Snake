@@ -1,34 +1,29 @@
 package snake.gui;
 
-import java.awt.Component;
-import java.awt.Container;
 import java.awt.Dimension;
-import java.awt.Frame;
 import java.awt.Graphics2D;
-import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Robot;
-import java.awt.Toolkit;
-import java.awt.Window;
 import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
-import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.FutureTask;
-import java.util.concurrent.TimeUnit;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JScrollPane;
 import javax.swing.JToggleButton;
-import javax.swing.SwingUtilities;
 import snake.Position;
 import snake.topology.Topology;
+import static snake.gui.RobotSupport.activate;
+import static snake.gui.RobotSupport.await;
+import static snake.gui.RobotSupport.awaitStableBounds;
+import static snake.gui.RobotSupport.check;
+import static snake.gui.RobotSupport.edt;
+import static snake.gui.RobotSupport.gameFrame;
+import static snake.gui.TestSupport.component;
 
 /** Whole-board visibility and asynchronous native move/resize regressions. */
 public final class SnakeViewportTests {
-	private static int checks;
 	private final JFrame frame;
 	private final Robot robot;
 
@@ -36,10 +31,9 @@ public final class SnakeViewportTests {
 		robot = new Robot();
 		robot.setAutoDelay(25);
 		SnakeFrame.main(new String[0]);
-		await(() -> findFrame() != null, "window appears");
-		frame = edt(SnakeViewportTests::findFrame);
-		edt(() -> { frame.toFront(); frame.requestFocus(); return null; });
-		await(frame::isFocused, "window gains focus");
+		await(() -> gameFrame() != null, "window appears");
+		frame = edt(RobotSupport::gameFrame);
+		activate(frame);
 	}
 
 	public static void main(final String[] args) {
@@ -58,13 +52,13 @@ public final class SnakeViewportTests {
 				tests.testFixedZoomAndRestart();
 				tests.testNativeGeometry();
 			}
-			System.out.println("SnakeViewportTests: " + checks + " checks passed, 0 failed");
+			System.out.println("SnakeViewportTests: " + RobotSupport.checks() + " checks passed, 0 failed");
 		} catch (final Exception | AssertionError failure) {
 			result = 1;
 			failure.printStackTrace();
 		} finally {
 			try {
-				edt(() -> { for (final Window window : Window.getWindows()) window.dispose(); return null; });
+				RobotSupport.disposeAllWindows();
 			} catch (final Exception failure) {
 				result = 1;
 				failure.printStackTrace();
@@ -138,7 +132,7 @@ public final class SnakeViewportTests {
 		// A deliberately constrained viewport reproduces scrolling even on the larger CI display.
 		edt(() -> { frame.setBounds(frame.getX(), frame.getY(), 500, 360); return null; });
 		await(() -> field().getVisibleRect().contains(field().headBounds()), "native resize reveals the head");
-		settle();
+		awaitStableBounds(frame);
 		edt(() -> { scroll().getViewport().setViewPosition(new Point(0, 0)); return null; });
 		check(edt(() -> !field().getVisibleRect().contains(field().headBounds())), "fixture really scrolls head off-screen");
 		tap(KeyEvent.VK_F2);
@@ -168,22 +162,23 @@ public final class SnakeViewportTests {
 	private void testNativeGeometry() throws Exception {
 		selectZoom("100%");
 		edt(() -> {
-			final Rectangle work = workArea();
+			final Rectangle work = WindowGeometry.workArea(frame);
 			frame.setLocation(work.x + work.width - frame.getWidth(), work.y + work.height - frame.getHeight());
 			return null;
 		});
-		settle();
+		awaitStableBounds(frame);
 		for (final String zoom : List.of("150%", "200%", "100%", "200%", "Fit")) {
 			selectZoom(zoom);
 			final Dimension requested = edt(() -> {
 				final Dimension preferred = frame.getPreferredSize();
-				final Rectangle work = workArea();
+				final Rectangle work = WindowGeometry.workArea(frame);
 				return new Dimension(Math.min(preferred.width, work.width), Math.min(preferred.height, work.height));
 			});
-			await(() -> frame.getSize().equals(requested) && workArea().contains(frame.getBounds()),
+			await(() -> frame.getSize().equals(requested) && WindowGeometry.workArea(frame).contains(frame.getBounds()),
 					"combined resize/reposition settles to requested dimensions for " + zoom);
-			settle();
-			check(edt(() -> frame.getSize().equals(requested) && workArea().contains(frame.getBounds())),
+			awaitStableBounds(frame);
+			check(edt(() -> frame.getSize().equals(requested)
+					&& WindowGeometry.workArea(frame).contains(frame.getBounds())),
 					"native events do not restore an earlier window size for " + zoom);
 		}
 		await(this::wholeBoardVisible, "Fit follows final settled native geometry");
@@ -191,25 +186,7 @@ public final class SnakeViewportTests {
 
 	private void selectZoom(final String label) throws Exception {
 		edt(() -> { combo("zoom").setSelectedItem(label); return null; });
-		settle();
-	}
-
-	/** A bounded stable interval, not an immediate assertion after an asynchronous native request. */
-	private void settle() throws Exception {
-		final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-		Rectangle previous = null;
-		long stableSince = System.nanoTime();
-		while (System.nanoTime() < deadline) {
-			final Rectangle current = edt(frame::getBounds);
-			if (!current.equals(previous)) {
-				previous = current;
-				stableSince = System.nanoTime();
-			} else if (System.nanoTime() - stableSince >= TimeUnit.MILLISECONDS.toNanos(300)) {
-				return;
-			}
-			Thread.sleep(20);
-		}
-		throw new AssertionError("Native geometry did not settle");
+		awaitStableBounds(frame);
 	}
 
 	private boolean wholeBoardVisible() {
@@ -217,58 +194,23 @@ public final class SnakeViewportTests {
 				&& field().getVisibleRect().contains(field().headBounds());
 	}
 
-	private Rectangle workArea() {
-		final Rectangle screen = frame.getGraphicsConfiguration().getBounds();
-		final Insets insets = Toolkit.getDefaultToolkit().getScreenInsets(frame.getGraphicsConfiguration());
-		return new Rectangle(screen.x + insets.left, screen.y + insets.top,
-				screen.width - insets.left - insets.right, screen.height - insets.top - insets.bottom);
+	private SnakeField field() {
+		return component(frame, SnakeField.class, c -> true);
 	}
 
-	private SnakeField field() { return find(frame, SnakeField.class, null); }
-	private JScrollPane scroll() { return find(frame, JScrollPane.class, null); }
-	private JToggleButton settings() { return find(frame, JToggleButton.class, "settings"); }
-	private JComboBox<?> combo(final String name) { return find(frame, JComboBox.class, name); }
+	private JScrollPane scroll() {
+		return component(frame, JScrollPane.class, c -> true);
+	}
+
+	private JToggleButton settings() {
+		return component(frame, JToggleButton.class, c -> "settings".equals(c.getName()));
+	}
+
+	private JComboBox<?> combo(final String name) {
+		return component(frame, JComboBox.class, c -> name.equals(c.getName()));
+	}
 
 	private void tap(final int key) {
-		robot.keyPress(key);
-		robot.keyRelease(key);
-		robot.delay(75);
-	}
-
-	private static JFrame findFrame() {
-		return Arrays.stream(Frame.getFrames()).filter(JFrame.class::isInstance).map(JFrame.class::cast)
-				.filter(f -> f.isVisible() && "Snake".equals(f.getTitle())).findFirst().orElse(null);
-	}
-
-	private static <T extends Component> T find(final Container root, final Class<T> type, final String name) {
-		for (final Component child : root.getComponents()) {
-			if (type.isInstance(child) && (name == null || name.equals(child.getName())))
-				return type.cast(child);
-			if (child instanceof Container container) {
-				final T found = find(container, type, name);
-				if (found != null) return found;
-			}
-		}
-		return null;
-	}
-
-	private static <T> T edt(final Callable<T> callable) throws Exception {
-		final FutureTask<T> task = new FutureTask<>(callable);
-		SwingUtilities.invokeLater(task);
-		return task.get(5, TimeUnit.SECONDS);
-	}
-
-	private static void await(final Callable<Boolean> condition, final String message) throws Exception {
-		final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-		while (!edt(condition)) {
-			if (System.nanoTime() >= deadline) throw new AssertionError("Timed out: " + message);
-			Thread.sleep(20);
-		}
-		check(true, message);
-	}
-
-	private static void check(final boolean condition, final String message) {
-		if (!condition) throw new AssertionError(message);
-		checks++;
+		RobotSupport.tap(robot, key);
 	}
 }

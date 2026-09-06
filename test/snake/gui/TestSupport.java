@@ -1,19 +1,23 @@
 package snake.gui;
 
+import java.awt.Component;
+import java.awt.Container;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Predicate;
 import javax.swing.SwingUtilities;
 import snake.Direction;
 import snake.Position;
 import snake.Snake;
 
 /**
- * Shared assertion helpers and fixtures for the suites. Failures are collected
- * rather than thrown, so one run reports every broken check; a suite that
- * aborts with an exception is reported as a failure as well.
+ * Shared assertion helpers, fixtures and component finders for the suites.
+ * Failures are collected rather than thrown, so one run reports every broken
+ * check; a suite that aborts with an exception is reported as a failure as
+ * well.
  */
 final class TestSupport {
 	@FunctionalInterface
@@ -47,6 +51,29 @@ final class TestSupport {
 					body.add(position);
 			}
 		return body;
+	}
+
+	/** Depth-first search for the first matching component under the root, or null. */
+	static <T extends Component> T find(final Container root, final Class<T> type, final Predicate<T> predicate) {
+		for (final Component child : root.getComponents()) {
+			if (type.isInstance(child) && predicate.test(type.cast(child)))
+				return type.cast(child);
+			if (child instanceof Container container) {
+				final T found = find(container, type, predicate);
+				if (found != null)
+					return found;
+			}
+		}
+		return null;
+	}
+
+	/** Like find, but a missing component fails the test. */
+	static <T extends Component> T component(final Container root, final Class<T> type,
+			final Predicate<T> predicate) {
+		final T found = find(root, type, predicate);
+		if (found == null)
+			throw new AssertionError("Missing component: " + type.getSimpleName());
+		return found;
 	}
 
 	/** Runs the suite body on the EDT, prints the summary and returns the process exit code. */

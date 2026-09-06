@@ -1,22 +1,14 @@
 package snake.gui;
 
 import java.awt.Component;
-import java.awt.Container;
 import java.awt.Dialog;
-import java.awt.Frame;
 import java.awt.KeyboardFocusManager;
-import java.awt.Point;
 import java.awt.Robot;
 import java.awt.Window;
-import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.FutureTask;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Predicate;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JDialog;
@@ -26,10 +18,15 @@ import javax.swing.SwingUtilities;
 import snake.Direction;
 import snake.Position;
 import snake.topology.Topology;
+import static snake.gui.RobotSupport.activate;
+import static snake.gui.RobotSupport.await;
+import static snake.gui.RobotSupport.check;
+import static snake.gui.RobotSupport.edt;
+import static snake.gui.RobotSupport.gameFrame;
+import static snake.gui.TestSupport.component;
 
 /** Real input and timer integration tests. The orchestration never blocks the EDT. */
 public final class SnakeInputTests {
-	private static int checks;
 	private final Robot robot;
 	private final JFrame frame;
 	private final JFrame other;
@@ -38,8 +35,8 @@ public final class SnakeInputTests {
 		robot = new Robot();
 		robot.setAutoDelay(25);
 		SnakeFrame.main(new String[0]);
-		await(() -> findFrame() != null, "main window appears");
-		frame = edt(SnakeInputTests::findFrame);
+		await(() -> gameFrame() != null, "main window appears");
+		frame = edt(RobotSupport::gameFrame);
 		other = edt(() -> {
 			final JFrame window = new JFrame("Focus target");
 			window.setModalExclusionType(Dialog.ModalExclusionType.APPLICATION_EXCLUDE);
@@ -54,18 +51,14 @@ public final class SnakeInputTests {
 		int result = 0;
 		try {
 			new SnakeInputTests().run();
-			System.out.println("SnakeInputTests: " + checks + " checks passed, 0 failed");
+			System.out.println("SnakeInputTests: " + RobotSupport.checks() + " checks passed, 0 failed");
 		} catch (final Exception | AssertionError failure) {
 			result = 1;
 			failure.printStackTrace();
-			System.err.println("SnakeInputTests: failed after " + checks + " checks");
+			System.err.println("SnakeInputTests: failed after " + RobotSupport.checks() + " checks");
 		} finally {
 			try {
-				edt(() -> {
-					for (final Window window : Window.getWindows())
-						window.dispose();
-					return null;
-				});
+				RobotSupport.disposeAllWindows();
 			} catch (final Exception failure) {
 				result = 1;
 				failure.printStackTrace();
@@ -76,9 +69,9 @@ public final class SnakeInputTests {
 
 	private void run() throws Exception {
 		check(!SwingUtilities.isEventDispatchThread(), "Robot orchestration runs outside the EDT");
-		final JComboBox<?> topology = edt(() -> find(frame, JComboBox.class, c -> "topology".equals(c.getName())));
-		final JSlider speed = edt(() -> find(frame, JSlider.class, c -> true));
-		final JComboBox<?> zoom = edt(() -> find(frame, JComboBox.class, c -> "zoom".equals(c.getName())));
+		final JComboBox<?> topology = edt(() -> component(frame, JComboBox.class, c -> "topology".equals(c.getName())));
+		final JSlider speed = edt(() -> component(frame, JSlider.class, c -> true));
+		final JComboBox<?> zoom = edt(() -> component(frame, JComboBox.class, c -> "zoom".equals(c.getName())));
 		tabTo(topology);
 		tap(KeyEvent.VK_SPACE);
 		tap(KeyEvent.VK_HOME);
@@ -259,16 +252,6 @@ public final class SnakeInputTests {
 		await(() -> field().isFocusOwner(), "board receives focus");
 	}
 
-	private void activate(final Window window) throws Exception {
-		edt(() -> {
-			window.setVisible(true);
-			window.toFront();
-			window.requestFocus();
-			return null;
-		});
-		await(window::isFocused, "window gains focus: " + window.getName());
-	}
-
 	private void tabTo(final Component target) throws Exception {
 		for (int i = 0; i < 30; i++) {
 			if (edt(() -> KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner() == target)) {
@@ -281,80 +264,24 @@ public final class SnakeInputTests {
 	}
 
 	private void tap(final int key) {
-		robot.keyPress(key);
-		robot.keyRelease(key);
-		robot.delay(50);
+		RobotSupport.tap(robot, key);
 	}
 
 	private void click(final Component component) throws Exception {
-		final Point point = edt(() -> {
-			final Point location = component.getLocationOnScreen();
-			location.translate(component.getWidth() / 2, component.getHeight() / 2);
-			return location;
-		});
-		robot.mouseMove(point.x, point.y);
-		robot.mousePress(InputEvent.BUTTON1_DOWN_MASK);
-		robot.mouseRelease(InputEvent.BUTTON1_DOWN_MASK);
-		robot.delay(50);
+		RobotSupport.click(robot, component);
 	}
 
 	private SnakeField field() {
-		return find(frame, SnakeField.class, c -> true);
+		return component(frame, SnakeField.class, c -> true);
 	}
 
 	private JButton button(final String text) {
-		return find(frame, JButton.class, button -> text.equals(button.getText()));
+		return component(frame, JButton.class, button -> text.equals(button.getText()));
 	}
 
-	private static JFrame findFrame() {
-		return Arrays.stream(Frame.getFrames()).filter(JFrame.class::isInstance).map(JFrame.class::cast)
-				.filter(frame -> frame.isVisible() && "Snake".equals(frame.getTitle())).findFirst().orElse(null);
-	}
-
+	/** The About dialog while it is showing, or null. */
 	private static JDialog about() {
 		return Arrays.stream(Window.getWindows()).filter(JDialog.class::isInstance).map(JDialog.class::cast)
 				.filter(dialog -> dialog.isVisible() && "About".equals(dialog.getTitle())).findFirst().orElse(null);
-	}
-
-	private static <T extends Component> T find(final Container root, final Class<T> type,
-			final Predicate<T> predicate) {
-		for (final Component child : root.getComponents()) {
-			if (type.isInstance(child) && predicate.test(type.cast(child)))
-				return type.cast(child);
-			if (child instanceof Container container) {
-				final T found = find(container, type, predicate);
-				if (found != null)
-					return found;
-			}
-		}
-		return null;
-	}
-
-	private static <T> T edt(final Callable<T> action) throws Exception {
-		final FutureTask<T> task = new FutureTask<>(action);
-		SwingUtilities.invokeLater(task);
-		return task.get(5, TimeUnit.SECONDS);
-	}
-
-	private static void await(final Callable<Boolean> condition, final String message) throws Exception {
-		final long deadline = System.nanoTime() + 5_000_000_000L;
-		while (System.nanoTime() < deadline) {
-			if (edt(condition)) {
-				check(true, message);
-				return;
-			}
-			Thread.sleep(20);
-		}
-		throw new AssertionError("Timed out: " + message + edt(() -> Arrays.stream(Window.getWindows())
-				.map(w -> "\n" + w.getClass().getSimpleName() + " " + w.getName() + " visible=" + w.isVisible()
-						+ " focused=" + w.isFocused() + " owner=" + (w.getOwner() == null ? "none" : w.getOwner().getName()))
-				.reduce("", String::concat)));
-	}
-
-	private static void check(final boolean condition, final String message) {
-		if (!condition)
-			throw new AssertionError(message);
-		checks++;
-		System.out.println("PASS " + checks + ": " + message);
 	}
 }

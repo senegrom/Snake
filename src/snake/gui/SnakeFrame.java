@@ -1,16 +1,11 @@
 package snake.gui;
 
 import java.awt.BorderLayout;
-import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Insets;
-import java.awt.KeyEventDispatcher;
-import java.awt.KeyboardFocusManager;
-import java.awt.Rectangle;
-import java.awt.Toolkit;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ComponentAdapter;
@@ -18,8 +13,6 @@ import java.awt.event.ComponentEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.util.HashMap;
-import java.util.Map;
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
 import javax.swing.BorderFactory;
@@ -57,29 +50,7 @@ public final class SnakeFrame {
 	private final JPanel detailsPanel = new JPanel();
 	private final JToggleButton settingsToggle = new JToggleButton("Settings", true);
 	private final JFrame frame = new JFrame("Snake");
-	private final Map<Integer, HeldKeyAction> heldKeys = new HashMap<>();
-	/** Tracks releases in any application window, but suppresses held-key input only in this frame. */
-	private final KeyEventDispatcher shortcutEvents = event -> {
-		final HeldKeyAction shortcut = heldKeys.get(event.getKeyCode());
-		if (shortcut == null)
-			return false;
-		if (event.getID() == KeyEvent.KEY_RELEASED) {
-			final boolean blocked = shortcut.blockedUntilRelease;
-			shortcut.release();
-			if (blocked && frame.isFocused()) {
-				event.consume();
-				return true;
-			}
-		} else if (event.getID() == KeyEvent.KEY_PRESSED && frame.isFocused()) {
-			// Track even keys handled by focused controls rather than our ActionMap.
-			shortcut.keyDown = true;
-			if (shortcut.blockedUntilRelease) {
-				event.consume();
-				return true;
-			}
-		}
-		return false;
-	};
+	private final ShortcutTracker shortcuts = new ShortcutTracker(frame);
 	private final JButton pauseButton = new JButton("Pause");
 	private final JLabel pointsLabel = new JLabel("Points 0");
 	private final JButton restartButton = new JButton("Restart");
@@ -97,7 +68,7 @@ public final class SnakeFrame {
 		configureControls();
 		configureLayout();
 		bindGameKeys();
-		KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(shortcutEvents);
+		shortcuts.install();
 		attachField(new SnakeField());
 
 		frame.addWindowFocusListener(new WindowAdapter() {
@@ -119,8 +90,7 @@ public final class SnakeFrame {
 
 			@Override
 			public void windowClosed(final WindowEvent event) {
-				KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(shortcutEvents);
-				heldKeys.values().forEach(HeldKeyAction::release);
+				shortcuts.uninstall();
 				field.shutdown();
 			}
 		});
@@ -194,18 +164,10 @@ public final class SnakeFrame {
 		bindSteer(inputMap, actionMap, KeyEvent.VK_DOWN, Direction.DOWN);
 		bindSteer(inputMap, actionMap, KeyEvent.VK_LEFT, Direction.LEFT);
 		bindSteer(inputMap, actionMap, KeyEvent.VK_UP, Direction.UP);
-		bindOnce(inputMap, actionMap, KeyEvent.VK_SPACE, "pause", this::togglePause);
-		bindOnce(inputMap, actionMap, KeyEvent.VK_F2, "start", this::startGame);
-		bindOnce(inputMap, actionMap, KeyEvent.VK_F3, "restart", this::restartGame);
-		bindOnce(inputMap, actionMap, KeyEvent.VK_ESCAPE, "pause-only", () -> field.pauseGame());
-	}
-
-	private void bindOnce(final InputMap inputMap, final ActionMap actionMap, final int keyCode,
-			final String name, final Runnable runnable) {
-		final HeldKeyAction press = new HeldKeyAction(runnable);
-		heldKeys.put(keyCode, press);
-		inputMap.put(KeyStroke.getKeyStroke(keyCode, 0, false), name);
-		actionMap.put(name, press);
+		shortcuts.bind(inputMap, actionMap, KeyEvent.VK_SPACE, "pause", this::togglePause);
+		shortcuts.bind(inputMap, actionMap, KeyEvent.VK_F2, "start", this::startGame);
+		shortcuts.bind(inputMap, actionMap, KeyEvent.VK_F3, "restart", this::restartGame);
+		shortcuts.bind(inputMap, actionMap, KeyEvent.VK_ESCAPE, "pause-only", () -> field.pauseGame());
 	}
 
 	private void bindSteer(final InputMap inputMap, final ActionMap actionMap, final int keyCode,
@@ -325,27 +287,7 @@ public final class SnakeFrame {
 
 	/** Keeps the enlarged board reachable even on a small display. */
 	private void packWindow() {
-		final boolean initial = !frame.isDisplayable();
-		if (initial)
-			frame.addNotify();
-		final Dimension preferred = frame.getPreferredSize();
-		final Rectangle screen = frame.getGraphicsConfiguration().getBounds();
-		final Insets insets = Toolkit.getDefaultToolkit().getScreenInsets(frame.getGraphicsConfiguration());
-		final int left = screen.x + insets.left;
-		final int top = screen.y + insets.top;
-		final int width = screen.width - insets.left - insets.right;
-		final int height = screen.height - insets.top - insets.bottom;
-		// Do not pack to an oversized native window and then shrink it: delayed
-		// native configure events can restore that intermediate size on HiDPI X11.
-		final int targetWidth = Math.min(preferred.width, width);
-		final int targetHeight = Math.min(preferred.height, height);
-		final int x = initial ? left + (width - targetWidth) / 2
-				: Math.max(left, Math.min(frame.getX(), left + width - targetWidth));
-		final int y = initial ? top + (height - targetHeight) / 2
-				: Math.max(top, Math.min(frame.getY(), top + height - targetHeight));
-		// Native geometry settles asynchronously. Submit one complete request;
-		// never follow a resize with a move based on potentially stale dimensions.
-		frame.setBounds(x, y, targetWidth, targetHeight);
+		WindowGeometry.placeWithinWorkArea(frame);
 		revealHead();
 	}
 
@@ -396,8 +338,7 @@ public final class SnakeFrame {
 
 	private void pauseForFocusLoss() {
 		afterAboutFocus = null;
-		// Focus loss is not a key release: auto-repeat may continue when we return.
-		heldKeys.values().forEach(HeldKeyAction::focusLost);
+		shortcuts.focusLost();
 		field.pauseGame();
 	}
 
@@ -489,40 +430,6 @@ public final class SnakeFrame {
 			field.setTopology(topology);
 		topologyDescription.setText("<html>" + topology.description().replace("; ", ";<br>") + "</html>");
 		topologyBox.setToolTipText(topology.description());
-	}
-
-	/** A held shortcut is one action, not a stream of toggles or restarts. */
-	private static final class HeldKeyAction extends AbstractAction {
-		private static final long serialVersionUID = 1L;
-		private final transient Runnable runnable;
-		private boolean pressed;
-		private boolean keyDown;
-		private boolean blockedUntilRelease;
-
-		HeldKeyAction(final Runnable runnable) {
-			this.runnable = runnable;
-		}
-
-		@Override
-		public void actionPerformed(final ActionEvent event) {
-			keyDown = true;
-			if (!pressed && !blockedUntilRelease) {
-				pressed = true;
-				runnable.run();
-			}
-		}
-
-		void focusLost() {
-			// Only an observed release can re-arm this key. If an outside-app
-			// release was missed, the next tap's release safely clears the latch.
-			blockedUntilRelease |= keyDown;
-		}
-
-		void release() {
-			pressed = false;
-			keyDown = false;
-			blockedUntilRelease = false;
-		}
 	}
 
 	private static AbstractAction action(final Runnable runnable) {
