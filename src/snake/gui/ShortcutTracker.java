@@ -17,10 +17,12 @@ import javax.swing.KeyStroke;
  * auto-repeat delivers. A key that is down when the window loses focus stays
  * suppressed until a real release is observed, so returning with the key
  * still held cannot act again; if the outside release was never delivered,
- * one tap clears the latch. Releases are tracked in every window of the
- * application, but presses are only suppressed while the game window is
- * focused. Repeated presses are stopped before they reach a different
- * focused control; a fresh control press still receives its normal release.
+ * one tap clears the latch. Presses in owned dialogs are also tracked so
+ * their closing key cannot become a game shortcut after focus returns.
+ * Releases are tracked in every application window, but presses are only
+ * suppressed while the game window is focused. Repeated presses are stopped
+ * before they reach a different focused control; a fresh control press still
+ * receives its normal release.
  */
 final class ShortcutTracker {
 	private final Window window;
@@ -44,16 +46,26 @@ final class ShortcutTracker {
 				event.consume();
 				return true;
 			}
-		} else if (event.getID() == KeyEvent.KEY_PRESSED && window.isFocused()) {
+		} else if (event.getID() == KeyEvent.KEY_PRESSED && ownsFocusedWindow()) {
 			// Suppress repeats before Swing can route them to a newly focused control,
 			// even if the original press was handled by a button instead of our action.
 			final boolean repeated = shortcut.keyDown;
 			shortcut.keyDown = true;
-			if (repeated || shortcut.blockedUntilRelease) {
+			// Owned dialogs keep their native key handling, including the initial close.
+			if (window.isFocused() && (repeated || shortcut.blockedUntilRelease)) {
 				event.consume();
 				return true;
 			}
 		}
+		return false;
+	}
+
+	/** Includes nested owned dialogs, but not unrelated windows in the same JVM. */
+	private boolean ownsFocusedWindow() {
+		for (Window focused = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusedWindow();
+				focused != null; focused = focused.getOwner())
+			if (focused == window)
+				return true;
 		return false;
 	}
 

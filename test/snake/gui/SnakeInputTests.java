@@ -6,6 +6,7 @@ import java.awt.KeyboardFocusManager;
 import java.awt.Robot;
 import java.awt.Window;
 import java.awt.event.KeyEvent;
+import java.beans.PropertyChangeListener;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -161,6 +162,7 @@ public final class SnakeInputTests {
 		check(edt(() -> field().status() == SnakeField.Status.PAUSED), "Escape never resumes");
 		robot.keyPress(KeyEvent.VK_SPACE);
 		await(() -> field().status() == SnakeField.Status.RUNNING, "press before modified release resumes");
+		robot.keyPress(KeyEvent.VK_SPACE);
 		robot.keyPress(KeyEvent.VK_SHIFT);
 		robot.keyRelease(KeyEvent.VK_SPACE);
 		robot.keyRelease(KeyEvent.VK_SHIFT);
@@ -224,6 +226,7 @@ public final class SnakeInputTests {
 		tap(KeyEvent.VK_ESCAPE);
 		await(() -> about() == null && frame.isFocused(), "About closes normally");
 		await(() -> field().status() == SnakeField.Status.RUNNING, "normal About close restores running game");
+		testHeldAboutEscape();
 
 		tap(KeyEvent.VK_ESCAPE);
 		await(() -> field().status() == SnakeField.Status.PAUSED, "manual pause before About");
@@ -245,6 +248,41 @@ public final class SnakeInputTests {
 		focusBoard();
 		Thread.sleep(200);
 		check(edt(() -> field().status() == SnakeField.Status.PAUSED), "external focus loss cancels About auto-resume");
+	}
+
+	/** A dialog's closing key must not become a fresh game shortcut on focus return. */
+	private void testHeldAboutEscape() throws Exception {
+		click(edt(() -> button("About")));
+		await(() -> about() != null && about().isFocused(), "About opens before held Escape");
+		final SnakeField current = edt(this::field);
+		final AtomicInteger changes = new AtomicInteger();
+		final PropertyChangeListener listener = event -> changes.incrementAndGet();
+		edt(() -> { current.addPropertyChangeListener(SnakeField.STATUS_PROPERTY, listener); return null; });
+		try {
+			robot.keyPress(KeyEvent.VK_ESCAPE);
+			await(() -> about() == null && frame.isFocused() && current.status() == SnakeField.Status.RUNNING,
+					"initial Escape closes About and resumes the game");
+			// One physical press: let native repeat continue through the modal-to-frame handoff.
+			for (int i = 0; i < 12; i++) {
+				Thread.sleep(100);
+				check(edt(() -> current.status() == SnakeField.Status.RUNNING),
+						"held dialog Escape cannot pause the resumed game");
+			}
+			// Cover desktops with native auto-repeat disabled as well.
+			for (int i = 0; i < 3; i++)
+				robot.keyPress(KeyEvent.VK_ESCAPE);
+			robot.waitForIdle();
+			check(changes.get() == 1, "dialog close resumes exactly once without transient re-pausing");
+		} finally {
+			robot.keyRelease(KeyEvent.VK_ESCAPE);
+			robot.waitForIdle();
+			edt(() -> { current.removePropertyChangeListener(SnakeField.STATUS_PROPERTY, listener); return null; });
+		}
+		check(edt(() -> current.status() == SnakeField.Status.RUNNING), "releasing the dialog key leaves play running");
+		tap(KeyEvent.VK_ESCAPE);
+		await(() -> current.status() == SnakeField.Status.PAUSED, "fresh Escape still pauses after dialog closure");
+		tap(KeyEvent.VK_SPACE);
+		await(() -> current.status() == SnakeField.Status.RUNNING, "Space can resume after the fresh Escape");
 	}
 
 	private void focusBoard() throws Exception {
