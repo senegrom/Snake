@@ -62,9 +62,7 @@ final class BoardPainter {
 	private static final Color GLINT_COLOR = new Color(255, 255, 255, 190);
 	private static final BasicStroke EDGE_STROKE = new BasicStroke(1f, BasicStroke.CAP_BUTT,
 			BasicStroke.JOIN_MITER, 10f, new float[] { 4f, 4f }, 0f);
-	private static final GradientPaint SHADING = new GradientPaint(0, 0, BOARD_LIGHT_COLOR,
-			BOARD_WIDTH, BOARD_HEIGHT, BOARD_SHADE_COLOR);
-	// Cell paints are defined at the origin and reused by translating the graphics to each cell
+	// Cell paints are defined at the origin; each is rendered once per scale into a sprite
 	private static final RadialGradientPaint APPLE_SHADING = cellShading(APPLE_COLOR);
 	private static final RadialGradientPaint HEAD_SHADING = cellShading(HEAD_COLOR);
 	private static final RadialGradientPaint SNAKE_SHADING = cellShading(SNAKE_COLOR);
@@ -72,7 +70,15 @@ final class BoardPainter {
 	private static final Color HEAD_OUTLINE = blend(HEAD_COLOR, Color.BLACK, 0.6f);
 	private static final Color SNAKE_OUTLINE = blend(SNAKE_COLOR, Color.BLACK, 0.6f);
 
-	private BufferedImage board = new BufferedImage(BOARD_WIDTH, BOARD_HEIGHT, BufferedImage.TYPE_INT_RGB);
+	// All images are kept at the output device's resolution, so a repaint is a
+	// background blit plus one sprite blit per cell rather than a full re-render
+	private BufferedImage board;
+	private BufferedImage background;
+	private BufferedImage bodySprite;
+	private BufferedImage headSprite;
+	private BufferedImage appleSprite;
+	private double scaleX = 1;
+	private double scaleY = 1;
 
 	/** Pixel centre of a board cell in panel coordinates. */
 	static Point cellCenter(final Position cell) {
@@ -100,70 +106,93 @@ final class BoardPainter {
 				* Math.hypot(transform.getScaleX(), transform.getShearY())));
 		final int height = Math.max(1, (int) Math.ceil(BOARD_HEIGHT
 				* Math.hypot(transform.getScaleY(), transform.getShearX())));
-		if (board.getWidth() != width || board.getHeight() != height)
-			board = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+		if (board != null && board.getWidth() == width && board.getHeight() == height)
+			return;
+		board = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+		scaleX = width / (double) BOARD_WIDTH;
+		scaleY = height / (double) BOARD_HEIGHT;
+		background = renderBackground(width, height);
+		bodySprite = renderSprite(SNAKE_SHADING, SNAKE_OUTLINE, false);
+		headSprite = renderSprite(HEAD_SHADING, HEAD_OUTLINE, false);
+		appleSprite = renderSprite(APPLE_SHADING, APPLE_OUTLINE, true);
 	}
 
 	private void renderBoard(final Snake snake, final Position apple) {
 		final Graphics2D g = board.createGraphics();
 		try {
-			g.scale(board.getWidth() / (double) BOARD_WIDTH, board.getHeight() / (double) BOARD_HEIGHT);
-			g.setPaint(SHADING);
-			g.fillRect(0, 0, BOARD_WIDTH, BOARD_HEIGHT);
-			g.setColor(STRIPE_COLOR);
-			for (int offset = -BOARD_HEIGHT; offset < BOARD_WIDTH; offset += STRIPE_PERIOD)
-				g.drawLine(offset, BOARD_HEIGHT - 1, offset + BOARD_HEIGHT - 1, 0);
-			g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-			paintSnake(g, snake);
+			g.drawImage(background, 0, 0, null);
+			final Position head = snake.head();
+			for (final Position cell : snake.body())
+				g.drawImage(cell.equals(head) ? headSprite : bodySprite, deviceX(cell.x() * CELL_SIZE),
+						deviceY(cell.y() * CELL_SIZE), null);
 			if (apple != null)
-				paintApple(g, apple);
+				g.drawImage(appleSprite, deviceX(apple.x() * CELL_SIZE), deviceY(apple.y() * CELL_SIZE), null);
+			paintEye(g, snake);
 		} finally {
 			g.dispose();
 		}
 	}
 
-	private static void paintSnake(final Graphics2D g, final Snake snake) {
+	/** One eye, two logical pixels ahead of the head centre in the queued direction. */
+	private void paintEye(final Graphics2D g, final Snake snake) {
 		final Position head = snake.head();
-		for (final Position cell : snake.body()) {
-			final boolean isHead = cell.equals(head);
-			paintCell(g, cell, isHead ? HEAD_SHADING : SNAKE_SHADING, isHead ? HEAD_OUTLINE : SNAKE_OUTLINE);
-		}
-		// One eye, two pixels ahead of the head centre in the queued direction
 		final Position ahead = snake.direction().move(head);
-		final int centreX = head.x() * CELL_SIZE + CELL_SIZE / 2;
-		final int centreY = head.y() * CELL_SIZE + CELL_SIZE / 2;
+		final int x = head.x() * CELL_SIZE + CELL_SIZE / 2 + 2 * (ahead.x() - head.x()) - 1;
+		final int y = head.y() * CELL_SIZE + CELL_SIZE / 2 + 2 * (ahead.y() - head.y()) - 1;
 		g.setColor(EYE_COLOR);
-		g.fillRect(centreX + 2 * (ahead.x() - head.x()) - 1, centreY + 2 * (ahead.y() - head.y()) - 1, 2, 2);
+		g.fillRect(deviceX(x), deviceY(y), Math.max(1, deviceX(2)), Math.max(1, deviceY(2)));
 	}
 
-	private static void paintCell(final Graphics2D g, final Position cell, final Paint shading, final Color outline) {
-		final int x = cell.x() * CELL_SIZE;
-		final int y = cell.y() * CELL_SIZE;
-		g.translate(x, y);
+	private int deviceX(final int logical) {
+		return (int) Math.round(logical * scaleX);
+	}
+
+	private int deviceY(final int logical) {
+		return (int) Math.round(logical * scaleY);
+	}
+
+	/** The shaded, striped empty board at device resolution; stripes stay one device pixel wide. */
+	private BufferedImage renderBackground(final int width, final int height) {
+		final BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+		final Graphics2D g = image.createGraphics();
 		try {
+			g.setPaint(new GradientPaint(0, 0, BOARD_LIGHT_COLOR, width, height, BOARD_SHADE_COLOR));
+			g.fillRect(0, 0, width, height);
+			g.setColor(STRIPE_COLOR);
+			final int period = Math.max(2, (int) Math.round(STRIPE_PERIOD * scaleX));
+			for (int offset = -height; offset < width; offset += period)
+				g.drawLine(offset, height - 1, offset + height - 1, 0);
+		} finally {
+			g.dispose();
+		}
+		return image;
+	}
+
+	/** A single cell, antialiased at device resolution with transparent corners. */
+	private BufferedImage renderSprite(final Paint shading, final Color outline, final boolean apple) {
+		final int width = Math.max(1, (int) Math.ceil(CELL_SIZE * scaleX));
+		final int height = Math.max(1, (int) Math.ceil(CELL_SIZE * scaleY));
+		final BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+		final Graphics2D g = image.createGraphics();
+		try {
+			g.scale(width / (double) CELL_SIZE, height / (double) CELL_SIZE);
+			g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 			g.setPaint(shading);
-			g.fillRoundRect(1, 1, CELL_SIZE - 2, CELL_SIZE - 2, 4, 4);
-			g.setColor(outline);
-			g.drawRoundRect(1, 1, CELL_SIZE - 3, CELL_SIZE - 3, 4, 4);
+			if (apple) {
+				g.fillOval(1, 1, CELL_SIZE - 2, CELL_SIZE - 2);
+				g.setColor(outline);
+				g.drawOval(1, 1, CELL_SIZE - 3, CELL_SIZE - 3);
+				g.setColor(GLINT_COLOR);
+				g.fillOval(3, 3, 2, 2);
+			} else {
+				g.fillRoundRect(1, 1, CELL_SIZE - 2, CELL_SIZE - 2, 4, 4);
+				g.setColor(outline);
+				g.drawRoundRect(1, 1, CELL_SIZE - 3, CELL_SIZE - 3, 4, 4);
+			}
 		} finally {
-			g.translate(-x, -y);
+			g.dispose();
 		}
-	}
-
-	private static void paintApple(final Graphics2D g, final Position apple) {
-		final int x = apple.x() * CELL_SIZE;
-		final int y = apple.y() * CELL_SIZE;
-		g.translate(x, y);
-		try {
-			g.setPaint(APPLE_SHADING);
-			g.fillOval(1, 1, CELL_SIZE - 2, CELL_SIZE - 2);
-			g.setColor(APPLE_OUTLINE);
-			g.drawOval(1, 1, CELL_SIZE - 3, CELL_SIZE - 3);
-			g.setColor(GLINT_COLOR);
-			g.fillOval(3, 3, 2, 2);
-		} finally {
-			g.translate(-x, -y);
-		}
+		return image;
 	}
 
 	/** Radial shading of one cell at the origin, lit from the top-left for a rounded, raised look. */
