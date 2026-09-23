@@ -5,7 +5,10 @@ import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Random;
+import java.util.Set;
 import javax.swing.JComponent;
 import javax.swing.RepaintManager;
 import snake.Direction;
@@ -32,6 +35,7 @@ public final class SnakeInteractionTests {
 			testStatusNotifications();
 			testOverlayKeepsWallsVisible();
 			testZoomAndTopologyHints();
+			testMarginMatchesGluing();
 		}));
 	}
 
@@ -178,6 +182,96 @@ public final class SnakeInteractionTests {
 				field.shutdown();
 			}
 		}
+	}
+
+	/**
+	 * Every margin cell of every gluing, corners included, copies the board cell
+	 * that a walk across the glued edges reaches: blue exactly where that cell
+	 * belongs to a random body, solid wall margin beyond a wall. Corner cells
+	 * are reached both ways round, which must agree.
+	 */
+	private static void testMarginMatchesGluing() {
+		final int columns = SnakeField.BOARD_COLUMNS;
+		final int rows = SnakeField.BOARD_ROWS;
+		final int margin = BoardPainter.BOARD_X / BoardPainter.CELL_SIZE;
+		final Random random = new Random(12345);
+		for (final Gluing horizontal : Gluing.values()) {
+			for (final Gluing vertical : Gluing.values()) {
+				final Topology topology = new Topology(horizontal, vertical);
+				final Set<Position> body = new LinkedHashSet<>();
+				body.add(new Position(columns / 2, rows / 2));
+				for (int y = 0; y < rows; y++)
+					for (int x = 0; x < columns; x++)
+						if ((x < margin || x >= columns - margin || y < margin || y >= rows - margin)
+								&& random.nextBoolean())
+							body.add(new Position(x, y));
+				final SnakeField field = new SnakeField(new Snake(Direction.RIGHT, List.copyOf(body)),
+						new Position(columns / 2 + 2, rows / 2));
+				field.setTopology(topology);
+				// The end message sits over the board, while the ready banner would cover the top margin
+				field.shutdown();
+				final BufferedImage image = render(field);
+				final List<String> wrong = new ArrayList<>();
+				for (int y = -margin; y < rows + margin; y++) {
+					for (int x = -margin; x < columns + margin; x++) {
+						final boolean outsideX = x < 0 || x >= columns;
+						final boolean outsideY = y < 0 || y >= rows;
+						if (!outsideX && !outsideY)
+							continue;
+						final int rgb = image.getRGB(BoardPainter.BOARD_X + x * BoardPainter.CELL_SIZE
+								+ BoardPainter.CELL_SIZE / 2, BoardPainter.BOARD_Y + y * BoardPainter.CELL_SIZE
+								+ BoardPainter.CELL_SIZE / 2);
+						final String cell = "(" + x + "," + y + ")";
+						if ((outsideX && horizontal == Gluing.WALL) || (outsideY && vertical == Gluing.WALL)) {
+							if (rgb != BoardPainter.WALL_MARGIN_COLOR.getRGB())
+								wrong.add(cell + " is not wall margin");
+							continue;
+						}
+						final Position source = develop(topology, x, y, true);
+						if (source == null || !source.equals(develop(topology, x, y, false)))
+							wrong.add(cell + " develops differently along the two axes");
+						else if (isBluish(rgb) != body.contains(source))
+							wrong.add(cell + " does not copy " + source);
+					}
+				}
+				check(wrong.isEmpty(), topology.description() + " margin copies the glued cells ("
+						+ wrong.size() + " wrong, first " + wrong.stream().limit(5).toList() + ")");
+			}
+		}
+	}
+
+	/**
+	 * The board cell shown at a margin position: walk there cell by cell from the
+	 * nearest board cell, along one axis first. Crossing a reflecting edge
+	 * reverses the walk's direction along the other axis from then on.
+	 */
+	private static Position develop(final Topology topology, final int targetX, final int targetY,
+			final boolean horizontalFirst) {
+		final int columns = SnakeField.BOARD_COLUMNS;
+		final int rows = SnakeField.BOARD_ROWS;
+		int x = Math.clamp(targetX, 0, columns - 1);
+		int y = Math.clamp(targetY, 0, rows - 1);
+		Position cell = new Position(x, y);
+		int signX = 1;
+		int signY = 1;
+		for (final boolean horizontal : new boolean[] { horizontalFirst, !horizontalFirst }) {
+			while (horizontal ? x != targetX : y != targetY) {
+				final int step = horizontal ? Integer.signum(targetX - x) : Integer.signum(targetY - y);
+				final Position stepped = horizontal ? cell.translate(signX * step, 0) : cell.translate(0, signY * step);
+				cell = topology.map(stepped, columns, rows);
+				if (cell == null)
+					return null;
+				if ((stepped.x() < 0 || stepped.x() >= columns) && topology.horizontal() == Gluing.FLIP)
+					signY = -signY;
+				if ((stepped.y() < 0 || stepped.y() >= rows) && topology.vertical() == Gluing.FLIP)
+					signX = -signX;
+				if (horizontal)
+					x += step;
+				else
+					y += step;
+			}
+		}
+		return cell;
 	}
 
 	private static boolean blueAt(final BufferedImage image, final Point point, final int zoom) {

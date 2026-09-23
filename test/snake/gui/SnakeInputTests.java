@@ -23,6 +23,7 @@ import static snake.gui.RobotSupport.activate;
 import static snake.gui.RobotSupport.await;
 import static snake.gui.RobotSupport.check;
 import static snake.gui.RobotSupport.edt;
+import static snake.gui.RobotSupport.focus;
 import static snake.gui.RobotSupport.gameFrame;
 import static snake.gui.TestSupport.component;
 
@@ -83,7 +84,7 @@ public final class SnakeInputTests {
 		tabTo(speed);
 		tap(KeyEvent.VK_HOME);
 		tap(KeyEvent.VK_UP);
-		check(edt(() -> speed.getValue() == 2), "focused slider receives arrow input");
+		await(() -> speed.getValue() == 2, "focused slider receives arrow input");
 		check(edt(() -> field().snake().direction() == Direction.RIGHT), "settings arrows do not steer");
 		tabTo(zoom);
 		tap(KeyEvent.VK_SPACE);
@@ -153,6 +154,7 @@ public final class SnakeInputTests {
 				robot.keyPress(KeyEvent.VK_SPACE);
 				check(edt(() -> field().status() == SnakeField.Status.PAUSED), "held Space stays paused");
 			}
+			robot.waitForIdle();
 			check(changes.get() == 1, "one physical press causes exactly one state transition");
 			check(edt(() -> paused.equals(List.copyOf(field().snake().body()))), "paused timer cannot move the snake");
 			check(edt(() -> seconds == field().elapsedSeconds()), "paused clock stays fixed");
@@ -164,7 +166,16 @@ public final class SnakeInputTests {
 		tap(KeyEvent.VK_ESCAPE);
 		await(() -> field().status() == SnakeField.Status.PAUSED, "Escape pauses without toggling");
 		tap(KeyEvent.VK_ESCAPE);
+		robot.waitForIdle();
 		check(edt(() -> field().status() == SnakeField.Status.PAUSED), "Escape never resumes");
+		// Esc pressed on a focused control also returns steering to the board, so
+		// the next Space resumes the game instead of pressing that control
+		tap(KeyEvent.VK_SPACE);
+		await(() -> field().status() == SnakeField.Status.RUNNING, "Space resumes before Escape on a control");
+		focus(edt(() -> button("Restart")));
+		tap(KeyEvent.VK_ESCAPE);
+		await(() -> field().status() == SnakeField.Status.PAUSED && field().isFocusOwner(),
+				"Escape on a focused control pauses and returns focus to the board");
 		robot.keyPress(KeyEvent.VK_SPACE);
 		await(() -> field().status() == SnakeField.Status.RUNNING, "press before modified release resumes");
 		robot.keyPress(KeyEvent.VK_SPACE);
@@ -184,6 +195,7 @@ public final class SnakeInputTests {
 			final List<Position> stopped = edt(() -> List.copyOf(old.snake().body()));
 			Thread.sleep(800);
 			robot.keyPress(KeyEvent.VK_F3);
+			robot.waitForIdle();
 			check(edt(() -> field() == fresh), "held restart does not replace the field repeatedly");
 			check(edt(() -> old.status() == SnakeField.Status.FINISHED
 					&& stopped.equals(List.copyOf(old.snake().body()))), "old timer stays stopped after restart");
@@ -253,6 +265,31 @@ public final class SnakeInputTests {
 		focusBoard();
 		Thread.sleep(200);
 		check(edt(() -> field().status() == SnakeField.Status.PAUSED), "external focus loss cancels About auto-resume");
+		testAboutClosedElsewhere();
+	}
+
+	/** An About close that leaves the focus in another window must not resume the game on a later return. */
+	private void testAboutClosedElsewhere() throws Exception {
+		tap(KeyEvent.VK_SPACE);
+		await(() -> field().status() == SnakeField.Status.RUNNING, "resume before the About close elsewhere");
+		click(edt(() -> button("About")));
+		await(() -> about() != null && about().isFocused(), "About opens before closing elsewhere");
+		// The game window cannot take the focus back, as when a window manager
+		// gives it to another window once the dialog closes
+		edt(() -> { frame.setFocusableWindowState(false); return null; });
+		try {
+			tap(KeyEvent.VK_ESCAPE);
+			await(() -> about() == null, "About closes while its owner cannot take the focus");
+			activate(other);
+			Thread.sleep(SnakeFrame.ABOUT_RESUME_GRACE_MS + 500);
+			check(edt(() -> field().status() == SnakeField.Status.PAUSED), "the game stays paused meanwhile");
+		} finally {
+			edt(() -> { frame.setFocusableWindowState(true); return null; });
+		}
+		activate(frame);
+		await(() -> field().isFocusOwner(), "a late return still restores steering to the board");
+		robot.waitForIdle();
+		check(edt(() -> field().status() == SnakeField.Status.PAUSED), "a late return does not resume the game");
 	}
 
 	/** A dialog's closing key must not become a fresh game shortcut on focus return. */

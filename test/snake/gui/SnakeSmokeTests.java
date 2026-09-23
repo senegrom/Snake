@@ -302,7 +302,10 @@ public final class SnakeSmokeTests {
 				time = (Integer) event.getNewValue();
 				timeChanges++;
 			});
-			field.addPropertyChangeListener(SnakeField.FINISHED_PROPERTY, event -> finished++);
+			field.addPropertyChangeListener(SnakeField.STATUS_PROPERTY, event -> {
+				if (event.getNewValue() == SnakeField.Status.FINISHED)
+					finished++;
+			});
 		}
 	}
 

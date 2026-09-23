@@ -35,6 +35,7 @@ public final class SnakeTests {
 		testFieldCollisions();
 		testFieldEatingAndWinning();
 		testFieldTopologiesAndInput();
+		testTurnsIntoTheNeck();
 	}
 
 	/** Every combination of edge gluings, including the rotated duplicates of the presets. */
@@ -390,5 +391,54 @@ public final class SnakeTests {
 		cylinderField.setTopology(Topology.CYLINDER);
 		cylinderField.step();
 		equal(SnakeField.Status.FINISHED, cylinderField.status(), "cylinder keeps its top wall");
+	}
+
+	/**
+	 * A turn is rejected exactly when its glued step would re-enter the neck.
+	 * Usually that is the literal reversal, but each projective-plane corner
+	 * reaches its diagonal partner across both edges.
+	 */
+	private static void testTurnsIntoTheNeck() {
+		final int columns = SnakeField.BOARD_COLUMNS;
+		final int rows = SnakeField.BOARD_ROWS;
+		final Snake cornerSnake = new Snake(Direction.RIGHT, List.of(new Position(columns - 1, rows - 1),
+				new Position(columns - 2, rows - 1), new Position(columns - 3, rows - 1)));
+		final SnakeField cornerField = new SnakeField(cornerSnake, new Position(10, 10));
+		cornerField.setTopology(Topology.PROJECTIVE_PLANE);
+		cornerField.step();
+		equal(new Position(0, 0), cornerSnake.head(), "the projective plane glues opposite corners");
+		check(!cornerField.requestDirection(Direction.LEFT), "the literal reversal into the neck is rejected");
+		check(!cornerField.requestDirection(Direction.UP), "the perpendicular turn into the neck is rejected");
+		check(cornerField.requestDirection(Direction.DOWN), "a turn away from the neck is accepted");
+		cornerField.step();
+		equal(new Position(0, 1), cornerSnake.head(), "the accepted turn leaves the corner");
+		equal(SnakeField.Status.READY, cornerField.status(), "the corner crossing remains playable");
+
+		// Every gluing, head cell, arrival and requested direction
+		int requests = 0;
+		final List<String> wrong = new ArrayList<>();
+		for (final Topology topology : allTopologies())
+			for (int y = 0; y < rows; y++)
+				for (int x = 0; x < columns; x++)
+					for (final Direction arrival : Direction.values()) {
+						final Position head = new Position(x, y);
+						final Position neck = topology.map(arrival.opposite().move(head), columns, rows);
+						if (neck == null)
+							continue;
+						final Position apple = List.of(new Position(10, 10), new Position(12, 10)).stream()
+								.filter(cell -> !cell.equals(head) && !cell.equals(neck)).findFirst().orElseThrow();
+						final SnakeField field = new SnakeField(new Snake(arrival, List.of(head, neck)), apple);
+						field.setTopology(topology);
+						for (final Direction requested : Direction.values()) {
+							requests++;
+							final boolean intoNeck = neck.equals(topology.map(requested.move(head), columns, rows));
+							if (field.requestDirection(requested) == intoNeck)
+								wrong.add(topology + " " + topology.description() + " head " + head + " neck "
+										+ neck + " " + requested);
+						}
+					}
+		check(requests > 100_000, "the turn census covers every cell (" + requests + " requests)");
+		check(wrong.isEmpty(), "a turn is accepted exactly when it does not lead into the neck ("
+				+ wrong.size() + " wrong, first " + wrong.stream().limit(5).toList() + ")");
 	}
 }

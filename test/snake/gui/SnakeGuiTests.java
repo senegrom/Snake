@@ -8,6 +8,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import javax.swing.Action;
 import javax.swing.JButton;
@@ -108,7 +109,6 @@ public final class SnakeGuiTests {
 		check(visibleSnakeFrame() == originalFrame, "restart does not open a second window");
 		final SnakeField restartedField = component(originalFrame, SnakeField.class, ignored -> true);
 		check(restartedField != field, "restart installs a fresh field");
-		equal(SnakeField.Status.FINISHED, field.status(), "restart shuts the old field down");
 		equal(SnakeField.Status.READY, restartedField.status(), "restarted field is ready");
 		check(start.isEnabled(), "restarted window can start");
 		check(!pause.isEnabled(), "restarted pause button is disabled");
@@ -129,9 +129,26 @@ public final class SnakeGuiTests {
 		equal(SnakeField.Status.PAUSED, restartedField.status(), "the next Space pauses the started game");
 		invokeKey(originalFrame, KeyEvent.VK_SPACE);
 		equal(SnakeField.Status.RUNNING, restartedField.status(), "and the one after resumes it");
-		testCrashDialog(restartedField, pause);
 
-		restartedField.shutdown();
+		// Restarting a live game must stop the old field, not merely replace it
+		final List<Position> liveBody = List.copyOf(restartedField.snake().body());
+		restart.doClick(0);
+		final SnakeField freshField = component(originalFrame, SnakeField.class, ignored -> true);
+		check(freshField != restartedField, "restarting a running game installs a fresh field");
+		equal(SnakeField.Status.FINISHED, restartedField.status(), "restart shuts the running field down");
+		restartedField.onTimerTick();
+		equal(liveBody, List.copyOf(restartedField.snake().body()), "a replaced field never moves again");
+		invokeKey(originalFrame, KeyEvent.VK_SPACE);
+		equal(SnakeField.Status.RUNNING, freshField.status(), "Space starts the fresh game");
+		invokeKey(originalFrame, KeyEvent.VK_ESCAPE);
+		equal(SnakeField.Status.PAUSED, freshField.status(), "window Esc binding pauses");
+		invokeKey(originalFrame, KeyEvent.VK_ESCAPE);
+		equal(SnakeField.Status.PAUSED, freshField.status(), "Esc never resumes");
+		invokeKey(originalFrame, KeyEvent.VK_SPACE);
+		equal(SnakeField.Status.RUNNING, freshField.status(), "Space resumes after Esc");
+		testCrashDialog(freshField, pause);
+
+		freshField.shutdown();
 		originalFrame.dispose();
 	}
 

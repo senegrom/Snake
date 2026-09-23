@@ -7,6 +7,7 @@ import java.awt.event.MouseEvent;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
@@ -37,7 +38,6 @@ final class SnakeField extends JPanel implements Scrollable {
 	/** Milliseconds between steps for speed levels 1 to 9. */
 	static final List<Integer> MOVE_DELAYS_MS = List.of(200, 160, 120, 80, 50, 30, 20, 14, 10);
 	static final String ERROR_PROPERTY = "gameError";
-	static final String FINISHED_PROPERTY = "gameFinished";
 	static final String POINTS_PROPERTY = "points";
 	static final String STATUS_PROPERTY = "status";
 	static final List<Integer> ZOOM_LEVELS = List.of(100, 150, 200);
@@ -112,7 +112,8 @@ final class SnakeField extends JPanel implements Scrollable {
 
 	boolean requestDirection(final Direction direction) {
 		final Direction previous = snake.direction();
-		final boolean accepted = status != Status.FINISHED && snake.requestDirection(direction);
+		final boolean accepted = status != Status.FINISHED && !turnsIntoNeck(direction)
+				&& snake.requestDirection(direction);
 		if (accepted && previous != snake.direction())
 			repaint();
 		return accepted;
@@ -376,7 +377,6 @@ final class SnakeField extends JPanel implements Scrollable {
 		moveTimer.stop();
 		setStatus(Status.FINISHED);
 		updateElapsedDisplay();
-		firePropertyChange(FINISHED_PROPERTY, false, true);
 		repaint();
 	}
 
@@ -423,6 +423,20 @@ final class SnakeField extends JPanel implements Scrollable {
 			if (!snake.contains(candidate) && selectedFreeCell-- == 0)
 				return candidate;
 		throw new IllegalStateException("Snake occupancy is inconsistent with its length");
+	}
+
+	/**
+	 * Whether the next step in this direction would re-enter the neck, the cell
+	 * the head has just left. Snake rejects the literal reversal itself, but on
+	 * the projective plane a corner cell reaches its diagonal partner across
+	 * both edges, so there a perpendicular turn leads back into the neck too.
+	 */
+	private boolean turnsIntoNeck(final Direction direction) {
+		Objects.requireNonNull(direction, "direction");
+		final Iterator<Position> cells = snake.body().iterator();
+		final Position head = cells.next();
+		return cells.hasNext()
+				&& cells.next().equals(topology.map(direction.move(head), BOARD_COLUMNS, BOARD_ROWS));
 	}
 
 	private void updateElapsedDisplay() {

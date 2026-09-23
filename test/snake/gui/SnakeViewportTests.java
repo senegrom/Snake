@@ -12,6 +12,7 @@ import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JScrollPane;
 import javax.swing.JToggleButton;
+import javax.swing.SwingUtilities;
 import snake.Position;
 import snake.topology.Topology;
 import static snake.gui.RobotSupport.activate;
@@ -42,7 +43,9 @@ public final class SnakeViewportTests {
 		try {
 			if (args.length > 1 || args.length == 1 && !List.of("render", "small").contains(args[0]))
 				throw new IllegalArgumentException("Expected render, small, or no argument");
-			edt(() -> { testFitRendering(); return null; });
+			// Deterministic, but its cold Swing and Java2D start-up can outlast the
+			// Robot suites' bounded EDT call on a loaded machine, so it waits unbounded
+			SwingUtilities.invokeAndWait(SnakeViewportTests::testFitRendering);
 			if (args.length == 0 || !"render".equals(args[0])) {
 				final SnakeViewportTests tests = new SnakeViewportTests();
 				if (args.length == 1) {
@@ -111,10 +114,13 @@ public final class SnakeViewportTests {
 		check(edt(() -> field().fitsWindow()), "Fit is the initial UI selection");
 		edt(() -> { combo("topology").setSelectedItem(Topology.TORUS); return null; });
 		final double initialScale = edt(() -> field().viewScale());
+		final int initialHeight = edt(() -> field().getHeight());
 		tap(KeyEvent.VK_F2);
 		await(() -> field().status() == SnakeField.Status.RUNNING && wholeBoardVisible(),
 				"Start exposes whole board, not an empty viewport strip");
-		check(edt(() -> !settings().isSelected() && field().viewScale() >= initialScale),
+		// The scale grows only when the height limits it, but the board always gains height
+		check(edt(() -> !settings().isSelected() && !combo("topology").isShowing()
+				&& field().getHeight() > initialHeight && field().viewScale() >= initialScale),
 				"starting collapses setup controls and gives the board more room");
 		final Position initial = edt(() -> field().snake().head());
 		await(() -> !initial.equals(field().snake().head()) && wholeBoardVisible(), "real movement remains visible in Fit");

@@ -134,18 +134,18 @@ public final class SnakeFocusLayoutTests {
 			System.out.println("Native Space repeats after focus return: " + (spacePresses.get() - presses));
 			// Also cover displays configured without native repeat.
 			robot.keyPress(KeyEvent.VK_SPACE);
-			robot.delay(75);
+			robot.waitForIdle();
 			check(transitions.get() == changes, "no transient pause/resume transitions occurred");
 			check(edt(() -> body.equals(List.copyOf(field().snake().body()))), "body stays frozen across held-key return");
 			check(edt(() -> seconds == field().elapsedSeconds()), "clock stays frozen across held-key return");
 			// Focused Swing buttons must not bypass the held-key suppression.
 			focus(edt(() -> button("Resume")));
 			robot.keyPress(KeyEvent.VK_SPACE);
-			robot.delay(75);
+			robot.waitForIdle();
 			check(edt(() -> !button("Resume").getModel().isPressed()), "repeat cannot arm a focused Resume button");
 		} finally {
 			robot.keyRelease(KeyEvent.VK_SPACE);
-			robot.delay(75);
+			robot.waitForIdle();
 		}
 		check(edt(() -> field().status() == SnakeField.Status.PAUSED), "releasing the old key does not resume");
 		focus(fieldOnEdt());
@@ -161,7 +161,7 @@ public final class SnakeFocusLayoutTests {
 			edt(() -> { dropReleases = missRelease; return null; });
 			try {
 				robot.keyRelease(KeyEvent.VK_SPACE);
-				robot.delay(75);
+				robot.waitForIdle();
 			} finally {
 				edt(() -> { dropReleases = false; return null; });
 			}
@@ -172,6 +172,7 @@ public final class SnakeFocusLayoutTests {
 			check(edt(() -> field().status() == SnakeField.Status.PAUSED), "outside release never resumes on return");
 			if (missRelease) {
 				tap(KeyEvent.VK_SPACE);
+				robot.waitForIdle();
 				check(edt(() -> field().status() == SnakeField.Status.PAUSED), "one safe tap re-arms a missed release");
 			}
 			tap(KeyEvent.VK_SPACE);
@@ -187,7 +188,7 @@ public final class SnakeFocusLayoutTests {
 			focus(fresh);
 			Thread.sleep(1200);
 			robot.keyPress(KeyEvent.VK_F3);
-			robot.delay(75);
+			robot.waitForIdle();
 			check(edt(() -> field() == fresh), "held F3 cannot reset again after focus return");
 		} finally {
 			robot.keyRelease(KeyEvent.VK_F3);
@@ -205,7 +206,7 @@ public final class SnakeFocusLayoutTests {
 			focus(fieldOnEdt());
 			Thread.sleep(700);
 			robot.keyPress(KeyEvent.VK_F2);
-			robot.delay(75);
+			robot.waitForIdle();
 			check(edt(() -> field().status() == SnakeField.Status.READY), "old held F2 cannot start a reset game");
 		} finally {
 			robot.keyRelease(KeyEvent.VK_F2);
@@ -223,11 +224,11 @@ public final class SnakeFocusLayoutTests {
 			focus(fieldOnEdt());
 			Thread.sleep(700);
 			robot.keyPress(KeyEvent.VK_SPACE);
-			robot.delay(75);
+			robot.waitForIdle();
 			check(edt(() -> field().status() == SnakeField.Status.PAUSED), "held control key cannot become a board shortcut");
 		} finally {
 			robot.keyRelease(KeyEvent.VK_SPACE);
-			robot.delay(75);
+			robot.waitForIdle();
 		}
 		check(edt(() -> field().status() == SnakeField.Status.PAUSED), "releasing held control key preserves pause");
 	}

@@ -71,6 +71,8 @@ public final class Snake {
 	 * Queues the direction for the next step. The queued turn may be revised
 	 * until the step executes; a reversal of the last completed step is
 	 * always rejected, so rapid input cannot fold the snake onto itself.
+	 * Edge gluings are the field's concern: it also rejects any other turn
+	 * whose glued step would re-enter the neck.
 	 *
 	 * @return whether the request is active (or was already active)
 	 */

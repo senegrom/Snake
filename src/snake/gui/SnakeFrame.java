@@ -30,6 +30,7 @@ import javax.swing.JSlider;
 import javax.swing.JToggleButton;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
+import javax.swing.Timer;
 import javax.swing.UIManager;
 import javax.swing.UnsupportedLookAndFeelException;
 import javax.swing.WindowConstants;
@@ -38,8 +39,10 @@ import snake.topology.Topology;
 
 /** Main application window and entry point. */
 public final class SnakeFrame {
-	private static final String VERSION = "0.6.0";
+	private static final String VERSION = "0.6.1";
 	private static final String ABOUT_TEXT = "Snake " + VERSION + " by CGH.";
+	/** How long a closed About dialog waits for the window to regain focus before it cancels the resume. */
+	static final int ABOUT_RESUME_GRACE_MS = 2000;
 
 	private final JButton aboutButton = new JButton("About");
 	private final JButton exitButton = new JButton("Exit");
@@ -166,7 +169,7 @@ public final class SnakeFrame {
 		shortcuts.bind(inputMap, actionMap, KeyEvent.VK_SPACE, "play-pause", this::playOrPause);
 		shortcuts.bind(inputMap, actionMap, KeyEvent.VK_F2, "start", this::startGame);
 		shortcuts.bind(inputMap, actionMap, KeyEvent.VK_F3, "restart", this::restartGame);
-		shortcuts.bind(inputMap, actionMap, KeyEvent.VK_ESCAPE, "pause-only", () -> field.pauseGame());
+		shortcuts.bind(inputMap, actionMap, KeyEvent.VK_ESCAPE, "pause-only", this::pauseOnly);
 	}
 
 	private void bindSteer(final InputMap inputMap, final ActionMap actionMap, final int keyCode,
@@ -342,7 +345,7 @@ public final class SnakeFrame {
 	private void showAbout() {
 		final SnakeField dialogField = field;
 		final boolean resumeAfterDialog = field.pauseGame();
-		final boolean[] leftApplication = { false };
+		final boolean[] resumeCancelled = { false };
 		final boolean[] restoreFocus = { false };
 		final JDialog dialog = new JOptionPane(ABOUT_TEXT, JOptionPane.INFORMATION_MESSAGE)
 				.createDialog(frame, "About");
@@ -357,7 +360,7 @@ public final class SnakeFrame {
 				if (dialog.isVisible()) {
 					restoreFocus[0] = ShortcutTracker.belongsTo(event.getOppositeWindow(), frame);
 					if (!restoreFocus[0])
-						leftApplication[0] = true;
+						resumeCancelled[0] = true;
 				}
 			}
 		});
@@ -372,13 +375,20 @@ public final class SnakeFrame {
 		if (field == dialogField && restoreFocus[0] && frame.isDisplayable()) {
 			afterAboutFocus = () -> {
 				if (field == dialogField) {
-					if (resumeAfterDialog && !leftApplication[0])
+					if (resumeAfterDialog && !resumeCancelled[0])
 						field.resumeGame();
 					field.requestFocusInWindow();
 				}
 			};
 			frame.requestFocus();
 			restoreAboutFocus();
+			// The window manager may give the focus to another window instead.
+			// Returning later must then not resume, as after any focus loss.
+			if (afterAboutFocus != null && resumeAfterDialog) {
+				final Timer expiry = new Timer(ABOUT_RESUME_GRACE_MS, event -> resumeCancelled[0] = true);
+				expiry.setRepeats(false);
+				expiry.start();
+			}
 		}
 	}
 
@@ -402,6 +412,16 @@ public final class SnakeFrame {
 		revealHead();
 		field.togglePause();
 		field.requestFocusInWindow();
+	}
+
+	/**
+	 * Esc pauses but never resumes. Like the Pause button it returns steering to
+	 * the board, so the next Space resumes instead of pressing a focused control.
+	 */
+	private void pauseOnly() {
+		field.pauseGame();
+		if (field.status() == SnakeField.Status.PAUSED)
+			field.requestFocusInWindow();
 	}
 
 	/** Space starts a ready game, then pauses and resumes it. A focused button or selector keeps Space for itself. */
