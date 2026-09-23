@@ -293,12 +293,10 @@ public final class SnakeFrame {
 	/** Replaces the field in place, keeping the window and all settings. */
 	private void restartGame() {
 		field.shutdown();
-		settingsToggle.setSelected(true);
-		detailsPanel.setVisible(true);
 		attachField(new SnakeField());
 		setPoints(0);
 		setTime(0);
-		revealHead();
+		setSettingsVisible(true);
 		field.requestFocusInWindow();
 	}
 
@@ -396,7 +394,6 @@ public final class SnakeFrame {
 		if (field.status() != SnakeField.Status.READY)
 			return;
 		setSettingsVisible(false);
-		revealHead();
 		field.startGame();
 		field.requestFocusInWindow();
 	}
@@ -407,7 +404,7 @@ public final class SnakeFrame {
 		field.requestFocusInWindow();
 	}
 
-	/** Space starts a ready game, then pauses and resumes it, whichever control has focus. */
+	/** Space starts a ready game, then pauses and resumes it. A focused button or selector keeps Space for itself. */
 	private void playOrPause() {
 		if (field.status() == SnakeField.Status.READY)
 			startGame();

@@ -26,7 +26,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 2
           persist-credentials: false
 
       - name: Set up Java 25
@@ -36,8 +35,9 @@ jobs:
           java-version-file: .java-version
 
       - name: Check whitespace
-        # A root commit has no parent, so fall back to diffing against the empty tree
-        run: git diff --check "$(git rev-parse --verify --quiet HEAD^ || git hash-object -t tree /dev/null)"
+        # Every tracked line against the empty tree, not just the last commit's
+        # changes, so no commit of a multi-commit push escapes the check
+        run: git diff --check "$(git hash-object -t tree /dev/null)" HEAD
 
       - name: Compile with all warnings enabled
         shell: bash
