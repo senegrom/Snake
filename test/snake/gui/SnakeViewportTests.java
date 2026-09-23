@@ -21,6 +21,7 @@ import static snake.gui.RobotSupport.check;
 import static snake.gui.RobotSupport.edt;
 import static snake.gui.RobotSupport.gameFrame;
 import static snake.gui.TestSupport.component;
+import static snake.gui.TestSupport.isBluish;
 
 /** Whole-board visibility and asynchronous native move/resize regressions. */
 public final class SnakeViewportTests {
@@ -91,17 +92,16 @@ public final class SnakeViewportTests {
 				boolean blue = false;
 				final Rectangle head = field.headBounds();
 				for (int y = head.y; y < head.y + head.height; y++)
-					for (int x = head.x; x < head.x + head.width; x++) {
-						final int rgb = image.getRGB(x, y);
-						blue |= (rgb & 255) - ((rgb >> 16) & 255) > 60;
-					}
+					for (int x = head.x; x < head.x + head.width; x++)
+						blue |= isBluish(image.getRGB(x, y));
 				check(blue, "scaled head is actually drawn at its reported bounds");
 				check(body.equals(List.copyOf(field.snake().body())) && apple.equals(field.apple()),
 						"Fit never changes game coordinates or apple placement");
 			}
 			field.setZoom(150);
 			check(!field.fitsWindow() && field.zoom() == 150, "fixed zoom exits Fit");
-			check(field.getPreferredSize().equals(new Dimension(735, 585)), "fixed zoom retains its dimensions");
+			check(field.getPreferredSize().equals(new Dimension(BoardPainter.PANEL_SIZE.width * 150 / 100,
+					BoardPainter.PANEL_SIZE.height * 150 / 100)), "fixed zoom retains its dimensions");
 			field.shutdown();
 		}
 	}

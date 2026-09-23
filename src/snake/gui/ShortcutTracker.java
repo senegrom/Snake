@@ -62,9 +62,13 @@ final class ShortcutTracker {
 
 	/** Includes nested owned dialogs, but not unrelated windows in the same JVM. */
 	private boolean ownsFocusedWindow() {
-		for (Window focused = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusedWindow();
-				focused != null; focused = focused.getOwner())
-			if (focused == window)
+		return belongsTo(KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusedWindow(), window);
+	}
+
+	/** Whether a window is the root itself or owned by it, directly or through nested dialogs; false for null. */
+	static boolean belongsTo(final Window candidate, final Window root) {
+		for (Window current = candidate; current != null; current = current.getOwner())
+			if (current == root)
 				return true;
 		return false;
 	}

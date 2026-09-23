@@ -41,10 +41,14 @@ jobs:
 
       - name: Compile with all warnings enabled
         shell: bash
+        # Production code is compiled on its own, as the README and jar builds
+        # do, so it cannot come to depend on the test helpers in its package
         run: |
           mkdir -p out
-          mapfile -d '' sources < <(find src test -name '*.java' -print0 | sort -z)
-          javac --release 25 -encoding UTF-8 -Xlint:all -Werror -d out "${sources[@]}"
+          mapfile -d '' main < <(find src -name '*.java' -print0 | sort -z)
+          mapfile -d '' tests < <(find test -name '*.java' -print0 | sort -z)
+          javac --release 25 -encoding UTF-8 -Xlint:all -Werror -d out "${main[@]}"
+          javac --release 25 -encoding UTF-8 -Xlint:all -Werror -cp out -d out "${tests[@]}"
 
       - name: Run headless regression tests
         run: |
@@ -85,8 +89,10 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
-          mapfile -d '' sources < <(find src test -name '*.java' -print0 | sort -z)
-          javac --release 25 -encoding UTF-8 -Xlint:all -Werror -d out "${sources[@]}"
+          mapfile -d '' main < <(find src -name '*.java' -print0 | sort -z)
+          mapfile -d '' tests < <(find test -name '*.java' -print0 | sort -z)
+          javac --release 25 -encoding UTF-8 -Xlint:all -Werror -d out "${main[@]}"
+          javac --release 25 -encoding UTF-8 -Xlint:all -Werror -cp out -d out "${tests[@]}"
 
       - name: Run real keyboard, focus and timer integration tests
         timeout-minutes: 2

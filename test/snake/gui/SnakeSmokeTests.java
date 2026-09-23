@@ -19,6 +19,7 @@ import static snake.gui.TestSupport.almostFullBody;
 import static snake.gui.TestSupport.check;
 import static snake.gui.TestSupport.equal;
 import static snake.gui.TestSupport.expect;
+import static snake.gui.TestSupport.isBluish;
 import static snake.gui.TestSupport.shortSnake;
 
 /** Targeted model, timing and headless-rendering smoke tests. */
@@ -337,12 +338,6 @@ public final class SnakeSmokeTests {
 
 	private static int pixel(final BufferedImage image, final Point point) {
 		return image.getRGB(point.x, point.y);
-	}
-
-	/** True for the faint blended echo of a blue snake cell, false for any grey or texture pixel. */
-	private static boolean isBluish(final int rgb) {
-		final Color color = new Color(rgb);
-		return color.getBlue() - color.getRed() >= 60;
 	}
 
 	private static boolean isReddish(final int rgb) {

@@ -23,7 +23,7 @@ import snake.Position;
 import snake.Snake;
 import snake.topology.Topology;
 
-/** Game state, timer and renderer. All live mutation occurs on the Swing EDT. */
+/** Game state, move timer and scrollable view, drawn by BoardPainter. All live mutation occurs on the Swing EDT. */
 @SuppressWarnings("serial")
 final class SnakeField extends JPanel implements Scrollable {
 	enum Status {
@@ -390,7 +390,12 @@ final class SnakeField extends JPanel implements Scrollable {
 				&& position.y() >= 0 && position.y() < BOARD_ROWS;
 	}
 
-	private void onTimerTick() {
+	/**
+	 * One tick of the move timer: a step, then the clock display. A failure
+	 * finishes the game and is published as an error event instead of escaping
+	 * into the timer. Package-private so that tests can drive a tick directly.
+	 */
+	void onTimerTick() {
 		if (status != Status.RUNNING)
 			return;
 		try {

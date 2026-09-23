@@ -31,35 +31,36 @@ import snake.topology.Topology;
  */
 final class BoardPainter {
 	static final int CELL_SIZE = 10;
-	static final int MARGIN_CELLS = 4;
-	static final int MARGIN = MARGIN_CELLS * CELL_SIZE;
+	private static final int MARGIN_CELLS = 4;
+	private static final int MARGIN = MARGIN_CELLS * CELL_SIZE;
 	static final int BOARD_WIDTH = SnakeField.BOARD_COLUMNS * CELL_SIZE;
 	static final int BOARD_HEIGHT = SnakeField.BOARD_ROWS * CELL_SIZE;
 	static final int BOARD_X = MARGIN;
 	static final int BOARD_Y = MARGIN;
 	static final Dimension PANEL_SIZE = new Dimension(BOARD_WIDTH + 2 * MARGIN, BOARD_HEIGHT + 2 * MARGIN);
 	static final int WALL_THICKNESS = 4;
-	static final float GHOST_ALPHA = 0.5f;
 
 	static final Color APPLE_COLOR = Color.RED;
-	static final Color BOARD_LIGHT_COLOR = new Color(254, 254, 254);
-	static final Color BOARD_SHADE_COLOR = new Color(230, 230, 230);
 	static final Color EYE_COLOR = Color.WHITE;
-	static final Color FLIP_EDGE_COLOR = new Color(214, 108, 0);
-	static final Color HEAD_COLOR = new Color(40, 140, 255);
 	static final Color MARGIN_COLOR = new Color(230, 230, 230);
-	static final Color SNAKE_COLOR = Color.BLUE;
-	static final Color STRIPE_COLOR = new Color(0, 0, 0, 16);
 	static final Color WALL_COLOR = Color.BLACK;
 	static final Color WALL_MARGIN_COLOR = new Color(204, 204, 204);
 	static final Color WIN_COLOR = new Color(0, 128, 0);
-	static final Color WRAP_EDGE_COLOR = new Color(112, 112, 112);
-	static final Font END_FONT = new Font("Verdana", Font.BOLD, 40);
+
+	private static final Color BOARD_LIGHT_COLOR = new Color(254, 254, 254);
+	private static final Color BOARD_SHADE_COLOR = new Color(230, 230, 230);
+	private static final Color FLIP_EDGE_COLOR = new Color(214, 108, 0);
+	private static final Color GLINT_COLOR = new Color(255, 255, 255, 190);
+	private static final Color HEAD_COLOR = new Color(40, 140, 255);
+	private static final Color SNAKE_COLOR = Color.BLUE;
+	private static final Color STRIPE_COLOR = new Color(0, 0, 0, 16);
+	private static final Color WRAP_EDGE_COLOR = new Color(112, 112, 112);
+	private static final Font END_FONT = new Font("Verdana", Font.BOLD, 40);
 	private static final Font STATUS_FONT = new Font("Dialog", Font.BOLD, 18);
 
+	private static final float GHOST_ALPHA = 0.5f;
 	private static final int STRIPE_PERIOD = 12;
 	private static final float[] SHADE_STOPS = { 0f, 0.6f, 1f };
-	private static final Color GLINT_COLOR = new Color(255, 255, 255, 190);
 	private static final BasicStroke EDGE_STROKE = new BasicStroke(1f, BasicStroke.CAP_BUTT,
 			BasicStroke.JOIN_MITER, 10f, new float[] { 4f, 4f }, 0f);
 	// Cell paints are defined at the origin; each is rendered once per scale into a sprite
@@ -86,16 +87,20 @@ final class BoardPainter {
 				BOARD_Y + cell.y() * CELL_SIZE + CELL_SIZE / 2);
 	}
 
-	/** Paints the board, its neighbours, edges and overlay onto a panel already filled with MARGIN_COLOR. */
+	/**
+	 * Paints the board, its neighbours, edges and any overlay onto a panel
+	 * already filled with MARGIN_COLOR. A terminal overlay is drawn across the
+	 * board; a status banner sits above it, clear of the top wall.
+	 */
 	void paint(final Graphics2D graphics, final Snake snake, final Position apple, final Topology topology,
-			final String endMessage, final Color endColor, final boolean terminal) {
+			final String overlay, final Color overlayColor, final boolean terminal) {
 		resizeBuffer(graphics);
 		renderBoard(snake, apple);
 		paintNeighbours(graphics, topology);
 		graphics.drawImage(board, BOARD_X, BOARD_Y, BOARD_WIDTH, BOARD_HEIGHT, null);
 		paintEdges(graphics, topology);
-		if (endMessage != null)
-			paintOverlay(graphics, endMessage, endColor, terminal);
+		if (overlay != null)
+			paintOverlay(graphics, overlay, overlayColor, terminal);
 	}
 
 	private void resizeBuffer(final Graphics2D graphics) {

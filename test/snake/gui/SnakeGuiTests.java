@@ -1,24 +1,31 @@
 package snake.gui;
 
 import java.awt.Container;
+import java.awt.EventQueue;
 import java.awt.KeyboardFocusManager;
+import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.util.Arrays;
 import java.util.Objects;
 import javax.swing.Action;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JSlider;
 import javax.swing.JToggleButton;
 import javax.swing.KeyStroke;
 import snake.Direction;
+import snake.Position;
 import snake.topology.Topology;
 import static snake.gui.TestSupport.check;
 import static snake.gui.TestSupport.component;
 import static snake.gui.TestSupport.equal;
+import static snake.gui.TestSupport.find;
 
 /** End-to-end smoke tests for the real Swing window under a virtual display. */
 public final class SnakeGuiTests {
@@ -120,9 +127,45 @@ public final class SnakeGuiTests {
 		check(!start.isEnabled() && !settings.isSelected(), "Space starts like the Start button, hiding the settings");
 		invokeKey(originalFrame, KeyEvent.VK_SPACE);
 		equal(SnakeField.Status.PAUSED, restartedField.status(), "the next Space pauses the started game");
+		invokeKey(originalFrame, KeyEvent.VK_SPACE);
+		equal(SnakeField.Status.RUNNING, restartedField.status(), "and the one after resumes it");
+		testCrashDialog(restartedField, pause);
 
 		restartedField.shutdown();
 		originalFrame.dispose();
+	}
+
+	/** A crashing timer tick finishes the game and reports the failure in an error dialog. */
+	private static void testCrashDialog(final SnakeField field, final JButton pause) {
+		// Corrupt the live model so that the next step fails inside the game loop
+		field.snake().advanceTo(new Position(-5, -5), false);
+		final String[] shown = new String[2];
+		// The error dialog is modal, so this runs inside its event loop. It records
+		// whichever dialog is showing and closes it, so the test cannot hang.
+		EventQueue.invokeLater(() -> {
+			final JDialog dialog = visibleDialog();
+			if (dialog != null) {
+				shown[0] = dialog.getTitle();
+				final JOptionPane pane = find(dialog, JOptionPane.class, ignored -> true);
+				shown[1] = pane == null ? null : String.valueOf(pane.getMessage());
+				dialog.dispose();
+			}
+		});
+		System.err.println("SnakeGuiTests: the next stack trace comes from a deliberately crashed game tick");
+		field.onTimerTick();
+		equal(SnakeField.Status.FINISHED, field.status(), "a crashing tick finishes the game and stops its timer");
+		equal("Error", shown[0], "a crashing tick opens an error dialog");
+		check(shown[1] != null && shown[1].startsWith("The game loop crashed:")
+				&& shown[1].contains(IllegalArgumentException.class.getName()),
+				"the error dialog names the failure: " + shown[1]);
+		check(visibleDialog() == null, "the error dialog closes");
+		check(!pause.isEnabled(), "a crashed game can no longer be paused");
+	}
+
+	/** The dialog showing in this application, or null. */
+	private static JDialog visibleDialog() {
+		return Arrays.stream(Window.getWindows()).filter(JDialog.class::isInstance).map(JDialog.class::cast)
+				.filter(JDialog::isVisible).findFirst().orElse(null);
 	}
 
 	/** A tap: the window action for the key, then a plain release. */

@@ -1,5 +1,6 @@
 package snake.gui;
 
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
 import java.lang.reflect.InvocationTargetException;
@@ -14,10 +15,10 @@ import snake.Position;
 import snake.Snake;
 
 /**
- * Shared assertion helpers, fixtures and component finders for the suites.
- * Failures are collected rather than thrown, so one run reports every broken
- * check; a suite that aborts with an exception is reported as a failure as
- * well.
+ * Shared assertion helpers, fixtures, component finders and pixel probes for
+ * the suites. Failures are collected rather than thrown, so one run reports
+ * every broken check; a suite that aborts with an exception is reported as a
+ * failure as well.
  */
 final class TestSupport {
 	@FunctionalInterface
@@ -80,14 +81,27 @@ final class TestSupport {
 	static int run(final String suiteName, final Runnable suite) {
 		try {
 			SwingUtilities.invokeAndWait(suite);
-		} catch (final InterruptedException | InvocationTargetException exception) {
-			failed++;
-			final Throwable cause = exception.getCause() == null ? exception : exception.getCause();
-			System.err.println("FAIL: " + suiteName + " aborted: " + cause);
-			cause.printStackTrace();
+		} catch (final InterruptedException exception) {
+			// The wait was cut short, not the suite: keep the interrupt for the caller
+			Thread.currentThread().interrupt();
+			aborted(suiteName, exception);
+		} catch (final InvocationTargetException exception) {
+			aborted(suiteName, exception.getCause() == null ? exception : exception.getCause());
 		}
 		System.out.println(suiteName + ": " + passed + " checks passed, " + failed + " failed");
 		return failed == 0 ? 0 : 1;
+	}
+
+	private static void aborted(final String suiteName, final Throwable cause) {
+		failed++;
+		System.err.println("FAIL: " + suiteName + " aborted: " + cause);
+		cause.printStackTrace();
+	}
+
+	/** True for a snake cell or its faint copy in the margin, false for any grey board, margin or texture pixel. */
+	static boolean isBluish(final int rgb) {
+		final Color color = new Color(rgb);
+		return color.getBlue() - color.getRed() >= 60;
 	}
 
 	static void check(final boolean condition, final String message) {

@@ -16,9 +16,13 @@ import snake.topology.Topology;
 import static snake.gui.TestSupport.check;
 import static snake.gui.TestSupport.equal;
 import static snake.gui.TestSupport.expect;
+import static snake.gui.TestSupport.isBluish;
 
 /** Deterministic regression coverage for view and lifecycle notifications. */
 public final class SnakeInteractionTests {
+	/** The fixture snake lies along the left edge in this row, head at column 2. */
+	private static final int FIXTURE_ROW = 5;
+
 	private SnakeInteractionTests() {
 	}
 
@@ -32,8 +36,8 @@ public final class SnakeInteractionTests {
 	}
 
 	private static SnakeField fixture(final Topology topology) {
-		final SnakeField field = new SnakeField(new Snake(Direction.RIGHT,
-				List.of(new Position(2, 5), new Position(1, 5), new Position(0, 5))), new Position(10, 10));
+		final SnakeField field = new SnakeField(new Snake(Direction.RIGHT, List.of(new Position(2, FIXTURE_ROW),
+				new Position(1, FIXTURE_ROW), new Position(0, FIXTURE_ROW))), new Position(10, 10));
 		field.setTopology(topology);
 		field.setMoveDelay(100_000);
 		return field;
@@ -147,15 +151,21 @@ public final class SnakeInteractionTests {
 				equal(vertical == Gluing.FLIP, hint.contains("reflect columns"), "vertical flip hint");
 				final SnakeField field = fixture(topology);
 				final List<Position> body = List.copyOf(field.snake().body());
+				// A body cell, and where its copy in the right margin appears: the same
+				// row, or the mirrored row across a flipped edge
+				final Point bodyCell = BoardPainter.cellCenter(new Position(1, FIXTURE_ROW));
+				final Point copyCell = BoardPainter.cellCenter(new Position(1,
+						horizontal == Gluing.FLIP ? SnakeField.BOARD_ROWS - 1 - FIXTURE_ROW : FIXTURE_ROW));
+				copyCell.translate(BoardPainter.BOARD_WIDTH, 0);
 				for (final int zoom : SnakeField.ZOOM_LEVELS) {
 					field.setZoom(zoom);
 					equal(zoom, field.zoom(), "zoom accessor");
-					equal(new Dimension(490 * zoom / 100, 390 * zoom / 100), field.getPreferredSize(),
+					equal(new Dimension(BoardPainter.PANEL_SIZE.width * zoom / 100,
+							BoardPainter.PANEL_SIZE.height * zoom / 100), field.getPreferredSize(),
 							"zoom scales the board and margins");
 					final BufferedImage image = render(field);
-					check(blueAt(image, 55, 95, zoom), "scaled board preserves snake cell positions");
-					final int ghostY = horizontal == Gluing.FLIP ? 295 : 95;
-					equal(horizontal != Gluing.WALL, blueAt(image, 465, ghostY, zoom),
+					check(blueAt(image, bodyCell, zoom), "scaled board preserves snake cell positions");
+					equal(horizontal != Gluing.WALL, blueAt(image, copyCell, zoom),
 							"scaled neighbour uses the correct reflection");
 					equal(body, List.copyOf(field.snake().body()), "zoom cannot change game coordinates");
 					equal(100_000, field.moveDelay(), "zoom cannot change speed");
@@ -170,14 +180,14 @@ public final class SnakeInteractionTests {
 		}
 	}
 
-	private static boolean blueAt(final BufferedImage image, final int x, final int y, final int zoom) {
-		final int rgb = image.getRGB(x * zoom / 100, y * zoom / 100);
-		return (rgb & 255) - ((rgb >> 16) & 255) >= 60;
+	private static boolean blueAt(final BufferedImage image, final Point point, final int zoom) {
+		return isBluish(image.getRGB(point.x * zoom / 100, point.y * zoom / 100));
 	}
 
+	/** Compares the top margin above the board, where the status banner is drawn. */
 	private static boolean differentOverlay(final BufferedImage first, final BufferedImage second) {
 		for (int y = 0; y < BoardPainter.BOARD_Y; y++)
-			for (int x = 100; x < 390; x++)
+			for (int x = BoardPainter.BOARD_X; x < BoardPainter.BOARD_X + BoardPainter.BOARD_WIDTH; x++)
 				if (first.getRGB(x, y) != second.getRGB(x, y))
 					return true;
 		return false;

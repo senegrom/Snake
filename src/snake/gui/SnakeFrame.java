@@ -6,7 +6,6 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Insets;
-import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
@@ -342,13 +341,6 @@ public final class SnakeFrame {
 		field.pauseGame();
 	}
 
-	private boolean isGameWindow(final Window window) {
-		for (Window current = window; current != null; current = current.getOwner())
-			if (current == frame)
-				return true;
-		return false;
-	}
-
 	private void showAbout() {
 		final SnakeField dialogField = field;
 		final boolean resumeAfterDialog = field.pauseGame();
@@ -365,7 +357,7 @@ public final class SnakeFrame {
 			@Override
 			public void windowLostFocus(final WindowEvent event) {
 				if (dialog.isVisible()) {
-					restoreFocus[0] = isGameWindow(event.getOppositeWindow());
+					restoreFocus[0] = ShortcutTracker.belongsTo(event.getOppositeWindow(), frame);
 					if (!restoreFocus[0])
 						leftApplication[0] = true;
 				}
