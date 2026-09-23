@@ -26,7 +26,7 @@ java -cp out snake.gui.SnakeFrame
 
 ## Controls and display
 
-Use the arrow keys to steer while the board has focus. Space pauses or resumes, Esc pauses without resuming, F2 starts a ready game, and F3 resets it. Holding a game shortcut triggers it only once per press. Tab and Shift+Tab reach the buttons and settings; focused settings keep their normal arrow keys, and Space activates a focused button. Starting, pausing or restarting returns focus to the board. You can also click the board to return to steering.
+Use the arrow keys to steer while the board has focus. Space starts a ready game and then pauses or resumes it, Esc pauses without resuming, F2 also starts a ready game, and F3 resets it. Holding a game shortcut triggers it only once per press. Tab and Shift+Tab reach the buttons and settings; focused settings keep their normal arrow keys, and Space activates a focused button. Starting, pausing or restarting returns focus to the board. You can also click the board to return to steering.
 
 Speed (1 to 9) and topology are chosen before the game starts. Restart keeps these settings, resets the score and clock, and reuses the window. The default **Fit** zoom scales the whole board, walls and neighbouring margins to the available viewport, so the snake and apples remain visible even on a small display. Setup controls and help collapse when play starts to give the board more room; **Settings** shows or hides them at any time, and Restart shows them again. Zoom remains accessible while settings are hidden.
 

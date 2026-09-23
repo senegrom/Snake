@@ -122,6 +122,11 @@ public final class SnakeInputTests {
 
 		tap(KeyEvent.VK_SPACE);
 		await(() -> field().status() == SnakeField.Status.RUNNING, "game can resume after dialog tests");
+		tap(KeyEvent.VK_F3);
+		await(() -> field().status() == SnakeField.Status.READY && field().isFocusOwner(),
+				"restart leaves a ready game with the board focused");
+		tap(KeyEvent.VK_SPACE);
+		await(() -> field().status() == SnakeField.Status.RUNNING, "Space on the board starts a ready game");
 		final SnakeField last = edt(this::field);
 		edt(() -> { frame.dispose(); return null; });
 		await(() -> last.status() == SnakeField.Status.FINISHED, "disposing window stops its timer");

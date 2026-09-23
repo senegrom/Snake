@@ -164,7 +164,7 @@ public final class SnakeFrame {
 		bindSteer(inputMap, actionMap, KeyEvent.VK_DOWN, Direction.DOWN);
 		bindSteer(inputMap, actionMap, KeyEvent.VK_LEFT, Direction.LEFT);
 		bindSteer(inputMap, actionMap, KeyEvent.VK_UP, Direction.UP);
-		shortcuts.bind(inputMap, actionMap, KeyEvent.VK_SPACE, "pause", this::togglePause);
+		shortcuts.bind(inputMap, actionMap, KeyEvent.VK_SPACE, "play-pause", this::playOrPause);
 		shortcuts.bind(inputMap, actionMap, KeyEvent.VK_F2, "start", this::startGame);
 		shortcuts.bind(inputMap, actionMap, KeyEvent.VK_F3, "restart", this::restartGame);
 		shortcuts.bind(inputMap, actionMap, KeyEvent.VK_ESCAPE, "pause-only", () -> field.pauseGame());
@@ -194,7 +194,7 @@ public final class SnakeFrame {
 			if (field.status() == SnakeField.Status.RUNNING)
 				field.requestFocusInWindow();
 		});
-		startButton.setToolTipText("Start a new game (F2)");
+		startButton.setToolTipText("Start a new game (F2 or Space)");
 		restartButton.setToolTipText("Reset the game, keeping settings (F3)");
 		pauseButton.setToolTipText("Pause or resume (Space on the board); Esc pauses");
 		startButton.addActionListener(event -> startGame());
@@ -242,7 +242,7 @@ public final class SnakeFrame {
 
 		final JPanel help = new JPanel(new GridLayout(0, 1, 0, 4));
 		help.add(topologyDescription);
-		help.add(new JLabel("<html>Arrows: steer · Space: pause/resume · F2: start · F3: restart"
+		help.add(new JLabel("<html>Arrows: steer · Space: play/pause · F2: start · F3: restart"
 				+ "<br>Tab: controls · Esc: pause · Click the board to return to steering</html>"));
 		final JPanel controls = new JPanel();
 		controls.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
@@ -413,6 +413,14 @@ public final class SnakeFrame {
 		revealHead();
 		field.togglePause();
 		field.requestFocusInWindow();
+	}
+
+	/** Space starts a ready game, then pauses and resumes it, whichever control has focus. */
+	private void playOrPause() {
+		if (field.status() == SnakeField.Status.READY)
+			startGame();
+		else
+			togglePause();
 	}
 
 	// Speed and topology are locked once a game starts; a stale change event

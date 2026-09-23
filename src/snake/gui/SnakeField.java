@@ -90,7 +90,7 @@ final class SnakeField extends JPanel implements Scrollable {
 		setPreferredSize(new Dimension(BoardPainter.PANEL_SIZE));
 		setFocusable(true);
 		getAccessibleContext().setAccessibleName("Snake board");
-		getAccessibleContext().setAccessibleDescription("Arrow keys steer; Space pauses or resumes.");
+		getAccessibleContext().setAccessibleDescription("Arrow keys steer; Space starts, pauses or resumes.");
 		addMouseListener(new MouseAdapter() {
 			@Override
 			public void mousePressed(final MouseEvent event) {

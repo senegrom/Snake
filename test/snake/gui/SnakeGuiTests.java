@@ -12,6 +12,7 @@ import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JSlider;
+import javax.swing.JToggleButton;
 import javax.swing.KeyStroke;
 import snake.Direction;
 import snake.topology.Topology;
@@ -41,6 +42,8 @@ public final class SnakeGuiTests {
 		final JSlider speed = component(originalFrame, JSlider.class, ignored -> true);
 		final JComboBox<?> topology = component(originalFrame, JComboBox.class, ignored -> true);
 		final SnakeField field = component(originalFrame, SnakeField.class, ignored -> true);
+		final JToggleButton settings = component(originalFrame, JToggleButton.class,
+				toggle -> "settings".equals(toggle.getName()));
 
 		check(start.isEnabled(), "start button begins enabled");
 		check(!pause.isEnabled(), "pause button begins disabled");
@@ -90,6 +93,8 @@ public final class SnakeGuiTests {
 		equal(SnakeField.Status.FINISHED, field.status(), "wall collision finishes the field");
 		check(!pause.isEnabled(), "finish event disables pause in the window");
 		equal("Pause", pause.getText(), "finish event resets the pause-button label");
+		invokeKey(originalFrame, KeyEvent.VK_SPACE);
+		equal(SnakeField.Status.FINISHED, field.status(), "Space does not revive a finished game");
 
 		restart.doClick(0);
 		check(originalFrame.isDisplayable() && originalFrame.isVisible(), "restart keeps the window open");
@@ -101,14 +106,20 @@ public final class SnakeGuiTests {
 		check(start.isEnabled(), "restarted window can start");
 		check(!pause.isEnabled(), "restarted pause button is disabled");
 		check(speed.isEnabled() && topology.isEnabled(), "restart unlocks the settings");
+		check(settings.isSelected(), "restart shows the settings again");
 		equal(SnakeField.MOVE_DELAYS_MS.get(2), restartedField.moveDelay(), "restart keeps the chosen speed");
 		equal(Topology.CYLINDER, restartedField.topology(), "restart keeps the chosen topology");
 		equal("Points 0", component(originalFrame, JLabel.class, label -> label.getText().startsWith("Points"))
 				.getText(), "restart resets the score");
 		equal("Time 0:00", component(originalFrame, JLabel.class, label -> label.getText().startsWith("Time"))
 				.getText(), "restart resets the clock");
-		start.doClick(0);
-		equal(SnakeField.Status.RUNNING, restartedField.status(), "the restarted game starts again");
+		// Restart focuses the board, where Space must start the game just as the
+		// initially focused Start button does
+		invokeKey(originalFrame, KeyEvent.VK_SPACE);
+		equal(SnakeField.Status.RUNNING, restartedField.status(), "Space starts a ready game");
+		check(!start.isEnabled() && !settings.isSelected(), "Space starts like the Start button, hiding the settings");
+		invokeKey(originalFrame, KeyEvent.VK_SPACE);
+		equal(SnakeField.Status.PAUSED, restartedField.status(), "the next Space pauses the started game");
 
 		restartedField.shutdown();
 		originalFrame.dispose();
