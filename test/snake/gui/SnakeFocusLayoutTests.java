@@ -22,7 +22,7 @@ import static snake.gui.RobotSupport.awaitStableBounds;
 import static snake.gui.RobotSupport.check;
 import static snake.gui.RobotSupport.edt;
 import static snake.gui.RobotSupport.focus;
-import static snake.gui.RobotSupport.gameFrame;
+import static snake.gui.RobotSupport.launchGame;
 import static snake.gui.TestSupport.component;
 
 /** Regressions for returning with a key held and controls on small, scaled displays. */
@@ -53,9 +53,7 @@ public final class SnakeFocusLayoutTests {
 			KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(inputProbe);
 			return null;
 		});
-		SnakeFrame.main(new String[0]);
-		await(() -> gameFrame() != null, "main window appears");
-		frame = edt(RobotSupport::gameFrame);
+		frame = launchGame();
 		activate(frame);
 	}
 
@@ -259,7 +257,7 @@ public final class SnakeFocusLayoutTests {
 		for (int tries = 0; tries < 20 && !edt(zoom::isFocusOwner); tries++)
 			tap(KeyEvent.VK_TAB);
 		check(edt(zoom::isFocusOwner), "Tab reaches visible zoom selector");
-		tap(KeyEvent.VK_SPACE);
+		RobotSupport.openPopup(robot);
 		tap(KeyEvent.VK_HOME);
 		tap(KeyEvent.VK_ENTER);
 		await(() -> field().zoom() == 100, "zoom is usable by keyboard on this display");

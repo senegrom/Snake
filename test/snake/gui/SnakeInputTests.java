@@ -24,7 +24,7 @@ import static snake.gui.RobotSupport.await;
 import static snake.gui.RobotSupport.check;
 import static snake.gui.RobotSupport.edt;
 import static snake.gui.RobotSupport.focus;
-import static snake.gui.RobotSupport.gameFrame;
+import static snake.gui.RobotSupport.launchGame;
 import static snake.gui.TestSupport.component;
 
 /** Real input and timer integration tests. The orchestration never blocks the EDT. */
@@ -36,9 +36,7 @@ public final class SnakeInputTests {
 	private SnakeInputTests() throws Exception {
 		robot = new Robot();
 		robot.setAutoDelay(25);
-		SnakeFrame.main(new String[0]);
-		await(() -> gameFrame() != null, "main window appears");
-		frame = edt(RobotSupport::gameFrame);
+		frame = launchGame();
 		other = edt(() -> {
 			final JFrame window = new JFrame("Focus target");
 			window.setModalExclusionType(Dialog.ModalExclusionType.APPLICATION_EXCLUDE);
@@ -75,7 +73,7 @@ public final class SnakeInputTests {
 		final JSlider speed = edt(() -> component(frame, JSlider.class, c -> true));
 		final JComboBox<?> zoom = edt(() -> component(frame, JComboBox.class, c -> "zoom".equals(c.getName())));
 		tabTo(topology);
-		tap(KeyEvent.VK_SPACE);
+		openPopup();
 		tap(KeyEvent.VK_HOME);
 		for (int i = 0; i < 3; i++)
 			tap(KeyEvent.VK_DOWN);
@@ -87,14 +85,14 @@ public final class SnakeInputTests {
 		await(() -> speed.getValue() == 2, "focused slider receives arrow input");
 		check(edt(() -> field().snake().direction() == Direction.RIGHT), "settings arrows do not steer");
 		tabTo(zoom);
-		tap(KeyEvent.VK_SPACE);
+		openPopup();
 		tap(KeyEvent.VK_END);
 		tap(KeyEvent.VK_UP); // Fit follows the three fixed zoom choices.
 		tap(KeyEvent.VK_ENTER);
 		await(() -> field().zoom() == 200, "zoom chosen by keyboard");
 		check(edt(() -> frame.getHeight() <= frame.getGraphicsConfiguration().getBounds().height),
 				"zoom stays within the screen, with scrolling for small displays");
-		tap(KeyEvent.VK_SPACE);
+		openPopup();
 		tap(KeyEvent.VK_HOME);
 		tap(KeyEvent.VK_DOWN);
 		tap(KeyEvent.VK_ENTER);
@@ -105,6 +103,7 @@ public final class SnakeInputTests {
 				"start shortcut starts the game and focuses the board");
 		final Position initial = edt(() -> field().snake().head());
 		await(() -> !field().snake().head().equals(initial), "real Swing timer moves the snake");
+		testZoomWhileRunning(zoom);
 		testHeldSpace();
 		tap(KeyEvent.VK_UP);
 		await(() -> field().snake().direction() == Direction.UP, "real arrow event steers while paused");
@@ -134,6 +133,26 @@ public final class SnakeInputTests {
 		final List<Position> stopped = edt(() -> List.copyOf(last.snake().body()));
 		Thread.sleep(400);
 		check(edt(() -> stopped.equals(List.copyOf(last.snake().body()))), "disposed field never moves again");
+	}
+
+	/**
+	 * During play, a zoom changed from the keyboard keeps the focus on the
+	 * selector: sending it to the board made the next arrow steer the snake.
+	 * A zoom change from anywhere else still returns steering to the board.
+	 * The torus has no walls to run into meanwhile.
+	 */
+	private void testZoomWhileRunning(final JComboBox<?> zoom) throws Exception {
+		final Direction heading = edt(() -> field().snake().direction());
+		tabTo(zoom);
+		openPopup();
+		tap(KeyEvent.VK_DOWN);
+		tap(KeyEvent.VK_ENTER);
+		await(() -> field().zoom() == 200 && !zoom.isPopupVisible(), "zoom changed by keyboard during play");
+		check(edt(zoom::isFocusOwner), "a keyboard zoom change keeps the focus on the selector");
+		check(edt(() -> field().status() == SnakeField.Status.RUNNING && field().snake().direction() == heading),
+				"the zoom keys neither pause nor steer the game");
+		edt(() -> { zoom.setSelectedItem("150%"); return null; });
+		await(() -> field().zoom() == 150 && field().isFocusOwner(), "other zoom changes return steering to the board");
 	}
 
 	private void testHeldSpace() throws Exception {
@@ -290,6 +309,12 @@ public final class SnakeInputTests {
 		await(() -> field().isFocusOwner(), "a late return still restores steering to the board");
 		robot.waitForIdle();
 		check(edt(() -> field().status() == SnakeField.Status.PAUSED), "a late return does not resume the game");
+		// The Escape that closed the dialog was released while no game window had
+		// the focus, so its release never arrived: the expired grace re-arms it.
+		tap(KeyEvent.VK_SPACE);
+		await(() -> field().status() == SnakeField.Status.RUNNING, "Space resumes after the late return");
+		tap(KeyEvent.VK_ESCAPE);
+		await(() -> field().status() == SnakeField.Status.PAUSED, "the first Escape after a late return pauses");
 	}
 
 	/** A dialog's closing key must not become a fresh game shortcut on focus return. */
@@ -345,6 +370,10 @@ public final class SnakeInputTests {
 
 	private void tap(final int key) {
 		RobotSupport.tap(robot, key);
+	}
+
+	private void openPopup() {
+		RobotSupport.openPopup(robot);
 	}
 
 	private void click(final Component component) throws Exception {

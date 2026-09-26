@@ -186,9 +186,9 @@ public final class SnakeInteractionTests {
 
 	/**
 	 * Every margin cell of every gluing, corners included, copies the board cell
-	 * that a walk across the glued edges reaches: blue exactly where that cell
-	 * belongs to a random body, solid wall margin beyond a wall. Corner cells
-	 * are reached both ways round, which must agree.
+	 * that a walk across the glued edges reaches, at every fixed zoom: blue
+	 * exactly where that cell belongs to a random body, solid wall margin beyond
+	 * a wall. Corner cells are reached both ways round, which must agree.
 	 */
 	private static void testMarginMatchesGluing() {
 		final int columns = SnakeField.BOARD_COLUMNS;
@@ -210,32 +210,36 @@ public final class SnakeInteractionTests {
 				field.setTopology(topology);
 				// The end message sits over the board, while the ready banner would cover the top margin
 				field.shutdown();
-				final BufferedImage image = render(field);
-				final List<String> wrong = new ArrayList<>();
-				for (int y = -margin; y < rows + margin; y++) {
-					for (int x = -margin; x < columns + margin; x++) {
-						final boolean outsideX = x < 0 || x >= columns;
-						final boolean outsideY = y < 0 || y >= rows;
-						if (!outsideX && !outsideY)
-							continue;
-						final int rgb = image.getRGB(BoardPainter.BOARD_X + x * BoardPainter.CELL_SIZE
-								+ BoardPainter.CELL_SIZE / 2, BoardPainter.BOARD_Y + y * BoardPainter.CELL_SIZE
-								+ BoardPainter.CELL_SIZE / 2);
-						final String cell = "(" + x + "," + y + ")";
-						if ((outsideX && horizontal == Gluing.WALL) || (outsideY && vertical == Gluing.WALL)) {
-							if (rgb != BoardPainter.WALL_MARGIN_COLOR.getRGB())
-								wrong.add(cell + " is not wall margin");
-							continue;
+				for (final int zoom : SnakeField.ZOOM_LEVELS) {
+					field.setZoom(zoom);
+					final BufferedImage image = render(field);
+					final List<String> wrong = new ArrayList<>();
+					for (int y = -margin; y < rows + margin; y++) {
+						for (int x = -margin; x < columns + margin; x++) {
+							final boolean outsideX = x < 0 || x >= columns;
+							final boolean outsideY = y < 0 || y >= rows;
+							if (!outsideX && !outsideY)
+								continue;
+							// The centre of the cell, scaled like the whole board
+							final int rgb = image.getRGB((BoardPainter.BOARD_X + x * BoardPainter.CELL_SIZE
+									+ BoardPainter.CELL_SIZE / 2) * zoom / 100, (BoardPainter.BOARD_Y
+									+ y * BoardPainter.CELL_SIZE + BoardPainter.CELL_SIZE / 2) * zoom / 100);
+							final String cell = "(" + x + "," + y + ")";
+							if ((outsideX && horizontal == Gluing.WALL) || (outsideY && vertical == Gluing.WALL)) {
+								if (rgb != BoardPainter.WALL_MARGIN_COLOR.getRGB())
+									wrong.add(cell + " is not wall margin");
+								continue;
+							}
+							final Position source = develop(topology, x, y, true);
+							if (source == null || !source.equals(develop(topology, x, y, false)))
+								wrong.add(cell + " develops differently along the two axes");
+							else if (isBluish(rgb) != body.contains(source))
+								wrong.add(cell + " does not copy " + source);
 						}
-						final Position source = develop(topology, x, y, true);
-						if (source == null || !source.equals(develop(topology, x, y, false)))
-							wrong.add(cell + " develops differently along the two axes");
-						else if (isBluish(rgb) != body.contains(source))
-							wrong.add(cell + " does not copy " + source);
 					}
+					check(wrong.isEmpty(), topology.description() + " margin copies the glued cells at " + zoom
+							+ "% (" + wrong.size() + " wrong, first " + wrong.stream().limit(5).toList() + ")");
 				}
-				check(wrong.isEmpty(), topology.description() + " margin copies the glued cells ("
-						+ wrong.size() + " wrong, first " + wrong.stream().limit(5).toList() + ")");
 			}
 		}
 	}

@@ -70,8 +70,10 @@ public final class ShortcutTrackerTests {
 		try {
 			robot = new Robot();
 			robot.setAutoDelay(25);
-			tests = edt(() -> {
-				UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+			// Metal on every platform: its selector opens on Space, which the
+			// fresh-press checks rely on and the Windows look and feel does not bind
+			tests = RobotSupport.edtWithoutDeadline(() -> {
+				UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
 				return new ShortcutTrackerTests();
 			});
 			activate(tests.frame);

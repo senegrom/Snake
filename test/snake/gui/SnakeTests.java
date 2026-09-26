@@ -415,8 +415,11 @@ public final class SnakeTests {
 		equal(SnakeField.Status.READY, cornerField.status(), "the corner crossing remains playable");
 
 		// Every gluing, head cell, arrival and requested direction
+		record Fold(Topology topology, Position head, Direction arrival, Direction requested) {
+		}
 		int requests = 0;
 		final List<String> wrong = new ArrayList<>();
+		final List<Fold> folds = new ArrayList<>();
 		for (final Topology topology : allTopologies())
 			for (int y = 0; y < rows; y++)
 				for (int x = 0; x < columns; x++)
@@ -435,10 +438,19 @@ public final class SnakeTests {
 							if (field.requestDirection(requested) == intoNeck)
 								wrong.add(topology + " " + topology.description() + " head " + head + " neck "
 										+ neck + " " + requested);
+							if (intoNeck && requested != arrival.opposite())
+								folds.add(new Fold(topology, head, arrival, requested));
 						}
 					}
 		check(requests > 100_000, "the turn census covers every cell (" + requests + " requests)");
 		check(wrong.isEmpty(), "a turn is accepted exactly when it does not lead into the neck ("
 				+ wrong.size() + " wrong, first " + wrong.stream().limit(5).toList() + ")");
+		// Beyond the literal reversal, the rule rejects exactly the corner folds:
+		// both arrivals at each of the projective plane's four corners.
+		final Set<Position> corners = Set.of(new Position(0, 0), new Position(columns - 1, 0),
+				new Position(0, rows - 1), new Position(columns - 1, rows - 1));
+		check(folds.size() == 8 && folds.stream().allMatch(fold -> fold.topology().equals(Topology.PROJECTIVE_PLANE))
+				&& corners.stream().allMatch(corner -> folds.stream().filter(fold -> fold.head().equals(corner))
+						.count() == 2), "only the projective plane's corners fold a turn into the neck " + folds);
 	}
 }

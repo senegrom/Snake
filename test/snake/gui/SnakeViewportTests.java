@@ -20,7 +20,7 @@ import static snake.gui.RobotSupport.await;
 import static snake.gui.RobotSupport.awaitStableBounds;
 import static snake.gui.RobotSupport.check;
 import static snake.gui.RobotSupport.edt;
-import static snake.gui.RobotSupport.gameFrame;
+import static snake.gui.RobotSupport.launchGame;
 import static snake.gui.TestSupport.component;
 import static snake.gui.TestSupport.isBluish;
 
@@ -32,9 +32,7 @@ public final class SnakeViewportTests {
 	private SnakeViewportTests() throws Exception {
 		robot = new Robot();
 		robot.setAutoDelay(25);
-		SnakeFrame.main(new String[0]);
-		await(() -> gameFrame() != null, "window appears");
-		frame = edt(RobotSupport::gameFrame);
+		frame = launchGame();
 		activate(frame);
 	}
 
@@ -157,7 +155,7 @@ public final class SnakeViewportTests {
 		// Select Fit by actual keyboard input, including after a scrolled fixed view.
 		edt(() -> { combo("zoom").requestFocusInWindow(); return null; });
 		await(() -> combo("zoom").isFocusOwner(), "zoom has keyboard focus");
-		tap(KeyEvent.VK_SPACE);
+		RobotSupport.openPopup(robot);
 		tap(KeyEvent.VK_END);
 		tap(KeyEvent.VK_ENTER);
 		await(() -> field().fitsWindow() && wholeBoardVisible(), "keyboard-selected Fit restores whole board");
