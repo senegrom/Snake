@@ -1,7 +1,9 @@
 package snake.gui;
 
+import java.awt.AWTException;
 import java.awt.Component;
 import java.awt.Frame;
+import java.awt.KeyboardFocusManager;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Robot;
@@ -25,13 +27,50 @@ import javax.swing.SwingUtilities;
 final class RobotSupport {
 	private static final long TIMEOUT_NANOS = TimeUnit.SECONDS.toNanos(5);
 	private static final long STABLE_NANOS = TimeUnit.MILLISECONDS.toNanos(300);
+	/** Every key a suite holds down at some point, released when it ends. */
+	private static final int[] HELD_KEYS = { KeyEvent.VK_SPACE, KeyEvent.VK_F2, KeyEvent.VK_F3, KeyEvent.VK_TAB,
+			KeyEvent.VK_ESCAPE, KeyEvent.VK_SHIFT };
 	private static int checks;
+	private static Robot robot;
 
 	private RobotSupport() {
 	}
 
-	static int checks() {
-		return checks;
+	/**
+	 * Runs a suite and exits with its result. Every key it may still hold is
+	 * released, so a failure cannot leave one down on the display for the next
+	 * suite, and every window is disposed.
+	 */
+	static void run(final String name, final TestSupport.CheckedAction suite) {
+		int result = 0;
+		try {
+			suite.run();
+			System.out.println(name + ": " + checks + " checks passed, 0 failed");
+		} catch (final Exception | AssertionError failure) {
+			result = 1;
+			failure.printStackTrace();
+			System.err.println(name + ": failed after " + checks + " checks");
+		} finally {
+			try {
+				if (robot != null)
+					for (final int key : HELD_KEYS)
+						robot.keyRelease(key);
+				disposeAllWindows();
+			} catch (final Exception failure) {
+				result = 1;
+				failure.printStackTrace();
+			}
+		}
+		System.exit(result);
+	}
+
+	/** The suites' one Robot, pacing its events 25 ms apart; created on first use. */
+	static Robot robot() throws AWTException {
+		if (robot == null) {
+			robot = new Robot();
+			robot.setAutoDelay(25);
+		}
+		return robot;
 	}
 
 	static void check(final boolean condition, final String message) {
@@ -129,33 +168,48 @@ final class RobotSupport {
 		await(component::isFocusOwner, "component gains focus");
 	}
 
-	static void tap(final Robot robot, final int key) {
-		robot.keyPress(key);
-		robot.keyRelease(key);
-		robot.delay(75);
-	}
-
-	/** Opens a focused selector's popup with Alt+Down, which every look and feel binds; Space only Metal and GTK. */
-	static void openPopup(final Robot robot) {
-		robot.keyPress(KeyEvent.VK_ALT);
-		try {
-			tap(robot, KeyEvent.VK_DOWN);
-		} finally {
-			robot.keyRelease(KeyEvent.VK_ALT);
+	/** Presses Tab until the target owns the focus. */
+	static void tabTo(final Component target) throws Exception {
+		for (int i = 0; i < 30; i++) {
+			if (edt(() -> KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner() == target)) {
+				check(true, "Tab reaches " + target.getClass().getSimpleName());
+				return;
+			}
+			tap(KeyEvent.VK_TAB);
 		}
-		robot.delay(75);
+		throw new AssertionError("Tab could not reach " + target);
 	}
 
-	static void click(final Robot robot, final Component component) throws Exception {
+	static void tap(final int key) throws AWTException {
+		robot().keyPress(key);
+		robot().keyRelease(key);
+		robot().delay(75);
+	}
+
+	/**
+	 * Opens a focused selector's popup with Alt+Down, which the Windows, Metal
+	 * and GTK looks and feels bind; only Metal and GTK also open it on Space.
+	 */
+	static void openPopup() throws AWTException {
+		robot().keyPress(KeyEvent.VK_ALT);
+		try {
+			tap(KeyEvent.VK_DOWN);
+		} finally {
+			robot().keyRelease(KeyEvent.VK_ALT);
+		}
+		robot().delay(75);
+	}
+
+	static void click(final Component component) throws Exception {
 		final Point point = edt(() -> {
 			final Point location = component.getLocationOnScreen();
 			location.translate(component.getWidth() / 2, component.getHeight() / 2);
 			return location;
 		});
-		robot.mouseMove(point.x, point.y);
-		robot.mousePress(InputEvent.BUTTON1_DOWN_MASK);
-		robot.mouseRelease(InputEvent.BUTTON1_DOWN_MASK);
-		robot.delay(50);
+		robot().mouseMove(point.x, point.y);
+		robot().mousePress(InputEvent.BUTTON1_DOWN_MASK);
+		robot().mouseRelease(InputEvent.BUTTON1_DOWN_MASK);
+		robot().delay(50);
 	}
 
 	/** The visible game window, or null before it appears. */
@@ -164,7 +218,7 @@ final class RobotSupport {
 				.filter(frame -> frame.isVisible() && "Snake".equals(frame.getTitle())).findFirst().orElse(null);
 	}
 
-	static void disposeAllWindows() throws Exception {
+	private static void disposeAllWindows() throws Exception {
 		edt(() -> {
 			for (final Window window : Window.getWindows())
 				window.dispose();

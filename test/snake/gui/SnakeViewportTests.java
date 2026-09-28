@@ -4,11 +4,9 @@ import java.awt.Dimension;
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Rectangle;
-import java.awt.Robot;
 import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
 import java.util.List;
-import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JScrollPane;
 import javax.swing.JToggleButton;
@@ -21,24 +19,24 @@ import static snake.gui.RobotSupport.awaitStableBounds;
 import static snake.gui.RobotSupport.check;
 import static snake.gui.RobotSupport.edt;
 import static snake.gui.RobotSupport.launchGame;
+import static snake.gui.RobotSupport.openPopup;
+import static snake.gui.RobotSupport.tap;
+import static snake.gui.TestSupport.combo;
 import static snake.gui.TestSupport.component;
+import static snake.gui.TestSupport.field;
 import static snake.gui.TestSupport.isBluish;
 
 /** Whole-board visibility and asynchronous native move/resize regressions. */
 public final class SnakeViewportTests {
 	private final JFrame frame;
-	private final Robot robot;
 
 	private SnakeViewportTests() throws Exception {
-		robot = new Robot();
-		robot.setAutoDelay(25);
 		frame = launchGame();
 		activate(frame);
 	}
 
 	public static void main(final String[] args) {
-		int result = 0;
-		try {
+		RobotSupport.run("SnakeViewportTests", () -> {
 			if (args.length > 1 || args.length == 1 && !List.of("render", "small").contains(args[0]))
 				throw new IllegalArgumentException("Expected render, small, or no argument");
 			// Deterministic, but its cold Swing and Java2D start-up can outlast the
@@ -54,19 +52,7 @@ public final class SnakeViewportTests {
 				tests.testFixedZoomAndRestart();
 				tests.testNativeGeometry();
 			}
-			System.out.println("SnakeViewportTests: " + RobotSupport.checks() + " checks passed, 0 failed");
-		} catch (final Exception | AssertionError failure) {
-			result = 1;
-			failure.printStackTrace();
-		} finally {
-			try {
-				RobotSupport.disposeAllWindows();
-			} catch (final Exception failure) {
-				result = 1;
-				failure.printStackTrace();
-			}
-		}
-		System.exit(result);
+		});
 	}
 
 	private static void testFitRendering() {
@@ -109,25 +95,25 @@ public final class SnakeViewportTests {
 
 	private void testFitLifecycle() throws Exception {
 		await(this::wholeBoardVisible, "default Fit shows the entire board before starting");
-		check(edt(() -> field().fitsWindow()), "Fit is the initial UI selection");
-		edt(() -> { combo("topology").setSelectedItem(Topology.TORUS); return null; });
-		final double initialScale = edt(() -> field().viewScale());
-		final int initialHeight = edt(() -> field().getHeight());
+		check(edt(() -> field(frame).fitsWindow()), "Fit is the initial UI selection");
+		edt(() -> { combo(frame, "topology").setSelectedItem(Topology.TORUS); return null; });
+		final double initialScale = edt(() -> field(frame).viewScale());
+		final int initialHeight = edt(() -> field(frame).getHeight());
 		tap(KeyEvent.VK_F2);
-		await(() -> field().status() == SnakeField.Status.RUNNING && wholeBoardVisible(),
+		await(() -> field(frame).status() == SnakeField.Status.RUNNING && wholeBoardVisible(),
 				"Start exposes whole board, not an empty viewport strip");
 		// The scale grows only when the height limits it, but the board always gains height
-		check(edt(() -> !settings().isSelected() && !combo("topology").isShowing()
-				&& field().getHeight() > initialHeight && field().viewScale() >= initialScale),
+		check(edt(() -> !settings().isSelected() && !combo(frame, "topology").isShowing()
+				&& field(frame).getHeight() > initialHeight && field(frame).viewScale() >= initialScale),
 				"starting collapses setup controls and gives the board more room");
-		final Position initial = edt(() -> field().snake().head());
-		await(() -> !initial.equals(field().snake().head()) && wholeBoardVisible(), "real movement remains visible in Fit");
+		final Position initial = edt(() -> field(frame).snake().head());
+		await(() -> !initial.equals(field(frame).snake().head()) && wholeBoardVisible(), "real movement remains visible in Fit");
 		tap(KeyEvent.VK_ESCAPE);
-		await(() -> field().status() == SnakeField.Status.PAUSED && wholeBoardVisible(), "paused Fit still shows all cells");
+		await(() -> field(frame).status() == SnakeField.Status.PAUSED && wholeBoardVisible(), "paused Fit still shows all cells");
 		edt(() -> { settings().doClick(0); return null; });
 		await(this::wholeBoardVisible, "opening settings refits without cropping the board");
 		tap(KeyEvent.VK_F3);
-		await(() -> field().status() == SnakeField.Status.READY && field().fitsWindow() && wholeBoardVisible(),
+		await(() -> field(frame).status() == SnakeField.Status.READY && field(frame).fitsWindow() && wholeBoardVisible(),
 				"Restart preserves Fit and displays new snake with expanded settings");
 	}
 
@@ -135,30 +121,30 @@ public final class SnakeViewportTests {
 		selectZoom("200%");
 		// A deliberately constrained viewport reproduces scrolling even on the larger CI display.
 		edt(() -> { frame.setBounds(frame.getX(), frame.getY(), 500, 360); return null; });
-		await(() -> field().getVisibleRect().contains(field().headBounds()), "native resize reveals the head");
+		await(() -> field(frame).getVisibleRect().contains(field(frame).headBounds()), "native resize reveals the head");
 		awaitStableBounds(frame);
 		edt(() -> { scroll().getViewport().setViewPosition(new Point(0, 0)); return null; });
-		check(edt(() -> !field().getVisibleRect().contains(field().headBounds())), "fixture really scrolls head off-screen");
+		check(edt(() -> !field(frame).getVisibleRect().contains(field(frame).headBounds())), "fixture really scrolls head off-screen");
 		tap(KeyEvent.VK_F2);
-		await(() -> field().status() == SnakeField.Status.RUNNING
-				&& field().getVisibleRect().contains(field().headBounds()), "Start reveals head in explicit zoom mode");
+		await(() -> field(frame).status() == SnakeField.Status.RUNNING
+				&& field(frame).getVisibleRect().contains(field(frame).headBounds()), "Start reveals head in explicit zoom mode");
 		tap(KeyEvent.VK_ESCAPE);
-		await(() -> field().status() == SnakeField.Status.PAUSED, "pause before scrolled restart");
+		await(() -> field(frame).status() == SnakeField.Status.PAUSED, "pause before scrolled restart");
 		edt(() -> { scroll().getViewport().setViewPosition(new Point(0, 0)); return null; });
-		final SnakeField old = edt(this::field);
+		final SnakeField old = edt(() -> field(frame));
 		tap(KeyEvent.VK_F3);
-		await(() -> field() != old && field().getVisibleRect().contains(field().headBounds()),
+		await(() -> field(frame) != old && field(frame).getVisibleRect().contains(field(frame).headBounds()),
 				"Restart discards stale scroll position and shows the new snake");
-		check(edt(() -> field().zoom() == 200 && !field().fitsWindow()), "Restart preserves explicit zoom selection");
+		check(edt(() -> field(frame).zoom() == 200 && !field(frame).fitsWindow()), "Restart preserves explicit zoom selection");
 		selectZoom("150%");
-		await(() -> field().getVisibleRect().contains(field().headBounds()), "zoom change reveals head");
+		await(() -> field(frame).getVisibleRect().contains(field(frame).headBounds()), "zoom change reveals head");
 		// Select Fit by actual keyboard input, including after a scrolled fixed view.
-		edt(() -> { combo("zoom").requestFocusInWindow(); return null; });
-		await(() -> combo("zoom").isFocusOwner(), "zoom has keyboard focus");
-		RobotSupport.openPopup(robot);
+		edt(() -> { combo(frame, "zoom").requestFocusInWindow(); return null; });
+		await(() -> combo(frame, "zoom").isFocusOwner(), "zoom has keyboard focus");
+		openPopup();
 		tap(KeyEvent.VK_END);
 		tap(KeyEvent.VK_ENTER);
-		await(() -> field().fitsWindow() && wholeBoardVisible(), "keyboard-selected Fit restores whole board");
+		await(() -> field(frame).fitsWindow() && wholeBoardVisible(), "keyboard-selected Fit restores whole board");
 		check(edt(() -> !scroll().getVerticalScrollBar().isVisible() && !scroll().getHorizontalScrollBar().isVisible()),
 				"Fit does not leave stale scrollbars");
 	}
@@ -189,17 +175,13 @@ public final class SnakeViewportTests {
 	}
 
 	private void selectZoom(final String label) throws Exception {
-		edt(() -> { combo("zoom").setSelectedItem(label); return null; });
+		edt(() -> { combo(frame, "zoom").setSelectedItem(label); return null; });
 		awaitStableBounds(frame);
 	}
 
 	private boolean wholeBoardVisible() {
-		return field().getVisibleRect().contains(field().boardBounds())
-				&& field().getVisibleRect().contains(field().headBounds());
-	}
-
-	private SnakeField field() {
-		return component(frame, SnakeField.class, c -> true);
+		return field(frame).getVisibleRect().contains(field(frame).boardBounds())
+				&& field(frame).getVisibleRect().contains(field(frame).headBounds());
 	}
 
 	private JScrollPane scroll() {
@@ -208,13 +190,5 @@ public final class SnakeViewportTests {
 
 	private JToggleButton settings() {
 		return component(frame, JToggleButton.class, c -> "settings".equals(c.getName()));
-	}
-
-	private JComboBox<?> combo(final String name) {
-		return component(frame, JComboBox.class, c -> name.equals(c.getName()));
-	}
-
-	private void tap(final int key) {
-		RobotSupport.tap(robot, key);
 	}
 }

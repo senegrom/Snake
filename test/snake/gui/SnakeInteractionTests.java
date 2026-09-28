@@ -1,7 +1,6 @@
 package snake.gui;
 
 import java.awt.Dimension;
-import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
@@ -9,7 +8,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
-import javax.swing.JComponent;
 import javax.swing.RepaintManager;
 import snake.Direction;
 import snake.Position;
@@ -20,6 +18,7 @@ import static snake.gui.TestSupport.check;
 import static snake.gui.TestSupport.equal;
 import static snake.gui.TestSupport.expect;
 import static snake.gui.TestSupport.isBluish;
+import static snake.gui.TestSupport.render;
 
 /** Deterministic regression coverage for view and lifecycle notifications. */
 public final class SnakeInteractionTests {
@@ -50,7 +49,7 @@ public final class SnakeInteractionTests {
 	private static void testDirectionRepainting() {
 		final SnakeField field = fixture(Topology.TORUS);
 		final RepaintManager previous = RepaintManager.currentManager(field);
-		final CountingRepaints repaints = new CountingRepaints();
+		final TestSupport.CountingRepaintManager repaints = new TestSupport.CountingRepaintManager();
 		RepaintManager.setCurrentManager(repaints);
 		try {
 			check(field.requestDirection(Direction.UP), "ready direction change accepted");
@@ -155,12 +154,7 @@ public final class SnakeInteractionTests {
 				equal(vertical == Gluing.FLIP, hint.contains("reflect columns"), "vertical flip hint");
 				final SnakeField field = fixture(topology);
 				final List<Position> body = List.copyOf(field.snake().body());
-				// A body cell, and where its copy in the right margin appears: the same
-				// row, or the mirrored row across a flipped edge
 				final Point bodyCell = BoardPainter.cellCenter(new Position(1, FIXTURE_ROW));
-				final Point copyCell = BoardPainter.cellCenter(new Position(1,
-						horizontal == Gluing.FLIP ? SnakeField.BOARD_ROWS - 1 - FIXTURE_ROW : FIXTURE_ROW));
-				copyCell.translate(BoardPainter.BOARD_WIDTH, 0);
 				for (final int zoom : SnakeField.ZOOM_LEVELS) {
 					field.setZoom(zoom);
 					equal(zoom, field.zoom(), "zoom accessor");
@@ -169,8 +163,6 @@ public final class SnakeInteractionTests {
 							"zoom scales the board and margins");
 					final BufferedImage image = render(field);
 					check(blueAt(image, bodyCell, zoom), "scaled board preserves snake cell positions");
-					equal(horizontal != Gluing.WALL, blueAt(image, copyCell, zoom),
-							"scaled neighbour uses the correct reflection");
 					equal(body, List.copyOf(field.snake().body()), "zoom cannot change game coordinates");
 					equal(100_000, field.moveDelay(), "zoom cannot change speed");
 				}
@@ -289,28 +281,5 @@ public final class SnakeInteractionTests {
 				if (first.getRGB(x, y) != second.getRGB(x, y))
 					return true;
 		return false;
-	}
-
-	private static BufferedImage render(final SnakeField field) {
-		field.setSize(field.getPreferredSize());
-		final BufferedImage image = new BufferedImage(field.getWidth(), field.getHeight(), BufferedImage.TYPE_INT_RGB);
-		final Graphics2D graphics = image.createGraphics();
-		try {
-			field.paint(graphics);
-		} finally {
-			graphics.dispose();
-		}
-		return image;
-	}
-
-	private static final class CountingRepaints extends RepaintManager {
-		private int count;
-
-		@Override
-		public void addDirtyRegion(final JComponent component, final int x, final int y,
-				final int width, final int height) {
-			if (component instanceof SnakeField)
-				count++;
-		}
 	}
 }

@@ -40,10 +40,9 @@ Settings occupy separate labelled rows so a narrow window cannot hide a wrapped 
 
 ## Package
 
+Compile as above, then:
+
 ```sh
-rm -rf out && mkdir out
-find src -name '*.java' -print0 \
-  | xargs -0 javac --release 25 -encoding UTF-8 -Xlint:all -Werror -d out
 jar --create --file Snake.jar --main-class snake.gui.SnakeFrame -C out .
 java -jar Snake.jar
 ```
@@ -52,10 +51,9 @@ java -jar Snake.jar
 
 ## Tests
 
+Compile as above, then the tests against it:
+
 ```sh
-rm -rf out && mkdir out
-find src -name '*.java' -print0 \
-  | xargs -0 javac --release 25 -encoding UTF-8 -Xlint:all -Werror -d out
 find test -name '*.java' -print0 \
   | xargs -0 javac --release 25 -encoding UTF-8 -Xlint:all -Werror -cp out -d out
 java -ea -Djava.awt.headless=true -cp out snake.gui.SnakeTests
@@ -71,7 +69,7 @@ java -ea -cp out snake.gui.SnakeViewportTests
 
 The dependency-free headless suites cover exhaustive properties of all nine edge gluings (including which turns lead back into the neck from every cell), game-model invariants, deterministic timing and apple selection, property notifications, paused-turn repainting, overlays, and pixel-level rendering at every fixed zoom level and fractional Fit scales, including the mirrored neighbour copy in every margin cell.
 
-The GUI suites need a display. `SnakeGuiTests` checks component actions, in-place restart and the error dialog shown when a game tick crashes, deterministically. `SnakeInputTests` runs outside the Swing event-dispatch thread, using real `java.awt.Robot` input and bounded EDT queries. It covers keyboard-only setup and play, held shortcuts, modifier changes on release, real timer movement, pause stability, focus loss, About-dialog behaviour, and stopping old/disposed timers. `SnakeFocusLayoutTests` covers held Space/F2/F3 across focus changes, keys originally handled by focused controls, observed and missed outside-window releases, and control visibility across all topologies and fixed zoom levels. `ShortcutTrackerTests` drives a minimal window of its own, in the Metal look and feel on every platform, to check that a held shortcut acts once even when focus moves to a button, toggle or selector before the key is released, while fresh presses still operate those controls normally. `SnakeViewportTests` verifies whole-board Fit visibility through Start/Pause/Restart/settings changes, head visibility after scrolled restarts and manual zoom changes, and native window sizing after zoom-driven repositioning. Geometry checks wait for native events to settle with a bounded timeout. The suites open selectors with Alt+Down, which every look and feel binds; Space opens them only in Metal and GTK. Do not type or click in the test windows while a suite runs.
+The GUI suites need a display. `SnakeGuiTests` checks component actions, in-place restart and the error dialog shown when a game tick crashes, deterministically. `SnakeInputTests` runs outside the Swing event-dispatch thread, using real `java.awt.Robot` input and bounded EDT queries. It covers keyboard-only setup and play, held shortcuts, real timer movement, pause stability, focus loss, About-dialog behaviour, and stopping old/disposed timers. `SnakeFocusLayoutTests` covers held Space/F2/F3 across focus changes, keys originally handled by focused controls, observed and missed outside-window releases, and control visibility across all topologies and fixed zoom levels. `ShortcutTrackerTests` drives a minimal window of its own, in the Metal look and feel on every platform, to check that a held shortcut acts once even when focus moves to a button, toggle or selector before the key is released, while fresh presses still operate those controls normally and a release with Shift held still re-arms it. `SnakeViewportTests` verifies whole-board Fit visibility through Start/Pause/Restart/settings changes, head visibility after scrolled restarts and manual zoom changes, and native window sizing after zoom-driven repositioning. Geometry checks wait for native events to settle with a bounded timeout. The suites open selectors with Alt+Down, which the Windows, Metal and GTK looks and feels bind; only Metal and GTK also open them on Space. Do not type or click in the test windows while a suite runs.
 
 GitHub Actions runs two jobs in parallel on pushes and pull requests to `master`, and on manual runs. The build job compiles the production code on its own and then the tests against it, both warning-clean on JDK 25, so production code cannot come to depend on the test helpers that share its package; it then runs the headless suites and the deterministic GUI smoke test. The desktop job runs the Robot-driven suites, so a timing-dependent failure is isolated from the build and can be re-run on its own: `SnakeInputTests` and `SnakeFocusLayoutTests` under bare Xvfb, and `ShortcutTrackerTests`, `SnakeFocusLayoutTests` and `SnakeViewportTests` under an Openbox-managed virtual desktop. Openbox is only a test dependency, not a game dependency.
 

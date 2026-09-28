@@ -20,6 +20,8 @@ import static snake.gui.RobotSupport.await;
 import static snake.gui.RobotSupport.check;
 import static snake.gui.RobotSupport.edt;
 import static snake.gui.RobotSupport.focus;
+import static snake.gui.RobotSupport.tabTo;
+import static snake.gui.RobotSupport.tap;
 
 /** Real press/release tests for shortcut ownership across component focus changes. */
 public final class ShortcutTrackerTests {
@@ -64,43 +66,17 @@ public final class ShortcutTrackerTests {
 	}
 
 	public static void main(final String[] args) {
-		int result = 0;
-		Robot robot = null;
-		ShortcutTrackerTests tests = null;
-		try {
-			robot = new Robot();
-			robot.setAutoDelay(25);
+		RobotSupport.run("ShortcutTrackerTests", () -> {
+			final Robot robot = RobotSupport.robot();
 			// Metal on every platform: its selector opens on Space, which the
 			// fresh-press checks rely on and the Windows look and feel does not bind
-			tests = RobotSupport.edtWithoutDeadline(() -> {
+			final ShortcutTrackerTests tests = RobotSupport.edtWithoutDeadline(() -> {
 				UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
 				return new ShortcutTrackerTests();
 			});
 			activate(tests.frame);
 			tests.run(robot);
-			System.out.println("ShortcutTrackerTests: " + RobotSupport.checks() + " checks passed, 0 failed");
-		} catch (final Exception | AssertionError failure) {
-			result = 1;
-			failure.printStackTrace();
-		} finally {
-			if (robot != null)
-				for (final int key : new int[] { KeyEvent.VK_SPACE, KeyEvent.VK_F2, KeyEvent.VK_F3,
-						KeyEvent.VK_TAB, KeyEvent.VK_ESCAPE, KeyEvent.VK_SHIFT })
-					robot.keyRelease(key);
-			final ShortcutTrackerTests current = tests;
-			try {
-				edt(() -> {
-					if (current != null)
-						current.tracker.uninstall();
-					return null;
-				});
-				RobotSupport.disposeAllWindows();
-			} catch (final Exception failure) {
-				result = 1;
-				failure.printStackTrace();
-			}
-		}
-		System.exit(result);
+		});
 	}
 
 	private void run(final Robot robot) throws Exception {
@@ -164,7 +140,7 @@ public final class ShortcutTrackerTests {
 		robot.waitForIdle();
 		check(edt(() -> shortcutActions == shortcutsBefore && buttonActions == afterFocus),
 				"control press cannot become a second action on the board through repeat");
-		RobotSupport.tap(robot, KeyEvent.VK_SPACE);
+		tap(KeyEvent.VK_SPACE);
 		await(() -> shortcutActions == shortcutsBefore + 1, "fresh board press works after control focus transfer");
 	}
 
@@ -174,9 +150,7 @@ public final class ShortcutTrackerTests {
 		final int buttonsBefore = edt(() -> buttonActions);
 		robot.keyPress(KeyEvent.VK_SPACE);
 		await(() -> shortcutActions == shortcutsBefore + 1, "pause before real Tab navigation");
-		for (int tries = 0; tries < 20 && !edt(button::isFocusOwner); tries++)
-			RobotSupport.tap(robot, KeyEvent.VK_TAB);
-		check(edt(button::isFocusOwner), "Tab can reach a control while Space is held");
+		tabTo(button);
 		repeatSpace(robot);
 		robot.keyRelease(KeyEvent.VK_SPACE);
 		robot.waitForIdle();
@@ -188,14 +162,14 @@ public final class ShortcutTrackerTests {
 		focus(settings);
 		final boolean selected = edt(settings::isSelected);
 		final int settingsBefore = edt(() -> settingsActions);
-		RobotSupport.tap(robot, KeyEvent.VK_SPACE);
+		tap(KeyEvent.VK_SPACE);
 		await(() -> settings.isSelected() != selected && settingsActions == settingsBefore + 1,
 				"fresh Space toggles Settings normally");
 		focus(zoom);
-		RobotSupport.tap(robot, KeyEvent.VK_SPACE);
+		tap(KeyEvent.VK_SPACE);
 		await(zoom::isPopupVisible, "fresh Space still opens the zoom selector");
-		RobotSupport.tap(robot, KeyEvent.VK_DOWN);
-		RobotSupport.tap(robot, KeyEvent.VK_ENTER);
+		tap(KeyEvent.VK_DOWN);
+		tap(KeyEvent.VK_ENTER);
 		await(() -> !zoom.isPopupVisible() && zoom.getSelectedIndex() == 1, "zoom keeps normal keyboard selection");
 		focus(board);
 		final int shortcutsBefore = edt(() -> shortcutActions);
@@ -204,7 +178,7 @@ public final class ShortcutTrackerTests {
 		robot.keyPress(KeyEvent.VK_SHIFT);
 		robot.keyRelease(KeyEvent.VK_SPACE);
 		robot.keyRelease(KeyEvent.VK_SHIFT);
-		RobotSupport.tap(robot, KeyEvent.VK_SPACE);
+		tap(KeyEvent.VK_SPACE);
 		await(() -> shortcutActions == shortcutsBefore + 2, "modified release still re-arms shortcuts");
 	}
 
@@ -220,7 +194,7 @@ public final class ShortcutTrackerTests {
 			robot.keyRelease(key);
 			robot.waitForIdle();
 			check(edt(() -> shortcutActions == before + 1), "held function key still fires once across focus changes");
-			RobotSupport.tap(robot, key);
+			tap(key);
 			await(() -> shortcutActions == before + 2, "released function key can fire again");
 		}
 	}

@@ -102,6 +102,14 @@ final class ShortcutTracker {
 		shortcuts.values().forEach(HeldKeyAction::release);
 	}
 
+	/**
+	 * Re-arms the keys whose release went to another window, but not a key
+	 * latched by focus loss: that one stays suppressed until its own release.
+	 */
+	void releaseUnlatched() {
+		shortcuts.values().forEach(HeldKeyAction::releaseUnlatched);
+	}
+
 	/** A held shortcut is one action, not a stream of toggles or restarts. */
 	private static final class HeldKeyAction extends AbstractAction {
 		private static final long serialVersionUID = 1L;
@@ -133,6 +141,11 @@ final class ShortcutTracker {
 			pressed = false;
 			keyDown = false;
 			blockedUntilRelease = false;
+		}
+
+		void releaseUnlatched() {
+			if (!blockedUntilRelease)
+				release();
 		}
 	}
 }

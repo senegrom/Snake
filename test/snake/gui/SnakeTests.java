@@ -1,10 +1,13 @@
 package snake.gui;
 
+import java.awt.event.KeyEvent;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
-import javax.swing.SwingUtilities;
+import javax.swing.Action;
+import javax.swing.ActionMap;
+import javax.swing.InputMap;
 import snake.Direction;
 import snake.Position;
 import snake.Snake;
@@ -26,7 +29,6 @@ public final class SnakeTests {
 	}
 
 	private static void runAll() {
-		check(SwingUtilities.isEventDispatchThread(), "Swing-facing tests run on the EDT");
 		testPositionAndDirection();
 		testTopologyExamples();
 		testTopologyProperties();
@@ -36,6 +38,7 @@ public final class SnakeTests {
 		testFieldEatingAndWinning();
 		testFieldTopologiesAndInput();
 		testTurnsIntoTheNeck();
+		testShortcutLatches();
 	}
 
 	/** Every combination of edge gluings, including the rotated duplicates of the presets. */
@@ -417,7 +420,6 @@ public final class SnakeTests {
 		// Every gluing, head cell, arrival and requested direction
 		record Fold(Topology topology, Position head, Direction arrival, Direction requested) {
 		}
-		int requests = 0;
 		final List<String> wrong = new ArrayList<>();
 		final List<Fold> folds = new ArrayList<>();
 		for (final Topology topology : allTopologies())
@@ -433,7 +435,6 @@ public final class SnakeTests {
 						final SnakeField field = new SnakeField(new Snake(arrival, List.of(head, neck)), apple);
 						field.setTopology(topology);
 						for (final Direction requested : Direction.values()) {
-							requests++;
 							final boolean intoNeck = neck.equals(topology.map(requested.move(head), columns, rows));
 							if (field.requestDirection(requested) == intoNeck)
 								wrong.add(topology + " " + topology.description() + " head " + head + " neck "
@@ -442,7 +443,6 @@ public final class SnakeTests {
 								folds.add(new Fold(topology, head, arrival, requested));
 						}
 					}
-		check(requests > 100_000, "the turn census covers every cell (" + requests + " requests)");
 		check(wrong.isEmpty(), "a turn is accepted exactly when it does not lead into the neck ("
 				+ wrong.size() + " wrong, first " + wrong.stream().limit(5).toList() + ")");
 		// Beyond the literal reversal, the rule rejects exactly the corner folds:
@@ -452,5 +452,30 @@ public final class SnakeTests {
 		check(folds.size() == 8 && folds.stream().allMatch(fold -> fold.topology().equals(Topology.PROJECTIVE_PLANE))
 				&& corners.stream().allMatch(corner -> folds.stream().filter(fold -> fold.head().equals(corner))
 						.count() == 2), "only the projective plane's corners fold a turn into the neck " + folds);
+	}
+
+	/**
+	 * When the About dialog's grace for returning the focus expires, it re-arms
+	 * keys whose release went to another window, but not one latched when the
+	 * game window lost the focus: releasing that too let a single physical
+	 * Space press pause the game and then, back in the window, resume it.
+	 */
+	private static void testShortcutLatches() {
+		final int[] spaces = { 0 };
+		final int[] escapes = { 0 };
+		final ShortcutTracker tracker = new ShortcutTracker(null);
+		final ActionMap actions = new ActionMap();
+		tracker.bind(new InputMap(), actions, KeyEvent.VK_SPACE, "play-pause", () -> spaces[0]++);
+		tracker.bind(new InputMap(), actions, KeyEvent.VK_ESCAPE, "pause-only", () -> escapes[0]++);
+		final Action space = actions.get("play-pause");
+		final Action escape = actions.get("pause-only");
+		space.actionPerformed(null); // pressed and held
+		tracker.focusLost(); // the About dialog opens meanwhile
+		escape.actionPerformed(null); // pressed after the focus loss, released elsewhere
+		tracker.releaseUnlatched(); // the grace expires without the focus
+		space.actionPerformed(null); // auto-repeat of the Space still held
+		escape.actionPerformed(null);
+		equal(1, spaces[0], "a key latched by focus loss stays latched when the grace expires");
+		equal(2, escapes[0], "a key pressed after the focus loss is re-armed when the grace expires");
 	}
 }

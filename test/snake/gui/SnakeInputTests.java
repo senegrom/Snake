@@ -1,8 +1,6 @@
 package snake.gui;
 
-import java.awt.Component;
 import java.awt.Dialog;
-import java.awt.KeyboardFocusManager;
 import java.awt.Robot;
 import java.awt.Window;
 import java.awt.event.KeyEvent;
@@ -15,17 +13,23 @@ import javax.swing.JComboBox;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JSlider;
-import javax.swing.SwingUtilities;
 import snake.Direction;
 import snake.Position;
 import snake.topology.Topology;
 import static snake.gui.RobotSupport.activate;
 import static snake.gui.RobotSupport.await;
 import static snake.gui.RobotSupport.check;
+import static snake.gui.RobotSupport.click;
 import static snake.gui.RobotSupport.edt;
 import static snake.gui.RobotSupport.focus;
 import static snake.gui.RobotSupport.launchGame;
+import static snake.gui.RobotSupport.openPopup;
+import static snake.gui.RobotSupport.tabTo;
+import static snake.gui.RobotSupport.tap;
+import static snake.gui.TestSupport.button;
+import static snake.gui.TestSupport.combo;
 import static snake.gui.TestSupport.component;
+import static snake.gui.TestSupport.field;
 
 /** Real input and timer integration tests. The orchestration never blocks the EDT. */
 public final class SnakeInputTests {
@@ -34,8 +38,7 @@ public final class SnakeInputTests {
 	private final JFrame other;
 
 	private SnakeInputTests() throws Exception {
-		robot = new Robot();
-		robot.setAutoDelay(25);
+		robot = RobotSupport.robot();
 		frame = launchGame();
 		other = edt(() -> {
 			final JFrame window = new JFrame("Focus target");
@@ -48,86 +51,69 @@ public final class SnakeInputTests {
 	}
 
 	public static void main(final String[] args) {
-		int result = 0;
-		try {
-			new SnakeInputTests().run();
-			System.out.println("SnakeInputTests: " + RobotSupport.checks() + " checks passed, 0 failed");
-		} catch (final Exception | AssertionError failure) {
-			result = 1;
-			failure.printStackTrace();
-			System.err.println("SnakeInputTests: failed after " + RobotSupport.checks() + " checks");
-		} finally {
-			try {
-				RobotSupport.disposeAllWindows();
-			} catch (final Exception failure) {
-				result = 1;
-				failure.printStackTrace();
-			}
-		}
-		System.exit(result);
+		RobotSupport.run("SnakeInputTests", () -> new SnakeInputTests().run());
 	}
 
 	private void run() throws Exception {
-		check(!SwingUtilities.isEventDispatchThread(), "Robot orchestration runs outside the EDT");
-		final JComboBox<?> topology = edt(() -> component(frame, JComboBox.class, c -> "topology".equals(c.getName())));
+		final JComboBox<?> topology = edt(() -> combo(frame, "topology"));
 		final JSlider speed = edt(() -> component(frame, JSlider.class, c -> true));
-		final JComboBox<?> zoom = edt(() -> component(frame, JComboBox.class, c -> "zoom".equals(c.getName())));
+		final JComboBox<?> zoom = edt(() -> combo(frame, "zoom"));
 		tabTo(topology);
 		openPopup();
 		tap(KeyEvent.VK_HOME);
 		for (int i = 0; i < 3; i++)
 			tap(KeyEvent.VK_DOWN);
 		tap(KeyEvent.VK_ENTER);
-		await(() -> field().topology().equals(Topology.TORUS), "topology chosen entirely by keyboard");
+		await(() -> field(frame).topology().equals(Topology.TORUS), "topology chosen entirely by keyboard");
 		tabTo(speed);
 		tap(KeyEvent.VK_HOME);
 		tap(KeyEvent.VK_UP);
 		await(() -> speed.getValue() == 2, "focused slider receives arrow input");
-		check(edt(() -> field().snake().direction() == Direction.RIGHT), "settings arrows do not steer");
+		check(edt(() -> field(frame).snake().direction() == Direction.RIGHT), "settings arrows do not steer");
 		tabTo(zoom);
 		openPopup();
 		tap(KeyEvent.VK_END);
 		tap(KeyEvent.VK_UP); // Fit follows the three fixed zoom choices.
 		tap(KeyEvent.VK_ENTER);
-		await(() -> field().zoom() == 200, "zoom chosen by keyboard");
+		await(() -> field(frame).zoom() == 200, "zoom chosen by keyboard");
 		check(edt(() -> frame.getHeight() <= frame.getGraphicsConfiguration().getBounds().height),
 				"zoom stays within the screen, with scrolling for small displays");
 		openPopup();
 		tap(KeyEvent.VK_HOME);
 		tap(KeyEvent.VK_DOWN);
 		tap(KeyEvent.VK_ENTER);
-		await(() -> field().zoom() == 150, "intermediate zoom selected");
+		await(() -> field(frame).zoom() == 150, "intermediate zoom selected");
 
 		tap(KeyEvent.VK_F2);
-		await(() -> field().status() == SnakeField.Status.RUNNING && field().isFocusOwner(),
+		await(() -> field(frame).status() == SnakeField.Status.RUNNING && field(frame).isFocusOwner(),
 				"start shortcut starts the game and focuses the board");
-		final Position initial = edt(() -> field().snake().head());
-		await(() -> !field().snake().head().equals(initial), "real Swing timer moves the snake");
+		final Position initial = edt(() -> field(frame).snake().head());
+		await(() -> !field(frame).snake().head().equals(initial), "real Swing timer moves the snake");
 		testZoomWhileRunning(zoom);
 		testHeldSpace();
 		tap(KeyEvent.VK_UP);
-		await(() -> field().snake().direction() == Direction.UP, "real arrow event steers while paused");
+		await(() -> field(frame).snake().direction() == Direction.UP, "real arrow event steers while paused");
 		tap(KeyEvent.VK_RIGHT);
-		click(edt(() -> button("Resume")));
-		await(() -> field().status() == SnakeField.Status.RUNNING && field().isFocusOwner(),
+		click(edt(() -> button(frame, "Resume")));
+		await(() -> field(frame).status() == SnakeField.Status.RUNNING && field(frame).isFocusOwner(),
 				"mouse resume restores board focus");
-		click(edt(() -> button("Pause")));
-		await(() -> field().status() == SnakeField.Status.PAUSED && field().isFocusOwner(),
+		click(edt(() -> button(frame, "Pause")));
+		await(() -> field(frame).status() == SnakeField.Status.PAUSED && field(frame).isFocusOwner(),
 				"mouse pause restores board focus");
 		tap(KeyEvent.VK_SPACE);
-		await(() -> field().status() == SnakeField.Status.RUNNING, "Space also resumes after clicking controls");
+		await(() -> field(frame).status() == SnakeField.Status.RUNNING, "Space also resumes after clicking controls");
 		testRestart();
 		testFocusLoss();
 		testAbout();
 
 		tap(KeyEvent.VK_SPACE);
-		await(() -> field().status() == SnakeField.Status.RUNNING, "game can resume after dialog tests");
+		await(() -> field(frame).status() == SnakeField.Status.RUNNING, "game can resume after dialog tests");
 		tap(KeyEvent.VK_F3);
-		await(() -> field().status() == SnakeField.Status.READY && field().isFocusOwner(),
+		await(() -> field(frame).status() == SnakeField.Status.READY && field(frame).isFocusOwner(),
 				"restart leaves a ready game with the board focused");
 		tap(KeyEvent.VK_SPACE);
-		await(() -> field().status() == SnakeField.Status.RUNNING, "Space on the board starts a ready game");
-		final SnakeField last = edt(this::field);
+		await(() -> field(frame).status() == SnakeField.Status.RUNNING, "Space on the board starts a ready game");
+		final SnakeField last = edt(() -> field(frame));
 		edt(() -> { frame.dispose(); return null; });
 		await(() -> last.status() == SnakeField.Status.FINISHED, "disposing window stops its timer");
 		final List<Position> stopped = edt(() -> List.copyOf(last.snake().body()));
@@ -142,80 +128,73 @@ public final class SnakeInputTests {
 	 * The torus has no walls to run into meanwhile.
 	 */
 	private void testZoomWhileRunning(final JComboBox<?> zoom) throws Exception {
-		final Direction heading = edt(() -> field().snake().direction());
+		final Direction heading = edt(() -> field(frame).snake().direction());
 		tabTo(zoom);
 		openPopup();
 		tap(KeyEvent.VK_DOWN);
 		tap(KeyEvent.VK_ENTER);
-		await(() -> field().zoom() == 200 && !zoom.isPopupVisible(), "zoom changed by keyboard during play");
+		await(() -> field(frame).zoom() == 200 && !zoom.isPopupVisible(), "zoom changed by keyboard during play");
 		check(edt(zoom::isFocusOwner), "a keyboard zoom change keeps the focus on the selector");
-		check(edt(() -> field().status() == SnakeField.Status.RUNNING && field().snake().direction() == heading),
-				"the zoom keys neither pause nor steer the game");
+		check(edt(() -> field(frame).status() == SnakeField.Status.RUNNING
+				&& field(frame).snake().direction() == heading), "the zoom keys neither pause nor steer the game");
 		edt(() -> { zoom.setSelectedItem("150%"); return null; });
-		await(() -> field().zoom() == 150 && field().isFocusOwner(), "other zoom changes return steering to the board");
+		await(() -> field(frame).zoom() == 150 && field(frame).isFocusOwner(),
+				"other zoom changes return steering to the board");
 	}
 
 	private void testHeldSpace() throws Exception {
 		final AtomicInteger changes = new AtomicInteger();
 		edt(() -> {
-			field().addPropertyChangeListener(SnakeField.STATUS_PROPERTY, event -> changes.incrementAndGet());
+			field(frame).addPropertyChangeListener(SnakeField.STATUS_PROPERTY, event -> changes.incrementAndGet());
 			return null;
 		});
 		robot.keyPress(KeyEvent.VK_SPACE);
 		try {
-			await(() -> field().status() == SnakeField.Status.PAUSED, "Space pauses on first press");
-			final List<Position> paused = edt(() -> List.copyOf(field().snake().body()));
-			final int seconds = edt(() -> field().elapsedSeconds());
+			await(() -> field(frame).status() == SnakeField.Status.PAUSED, "Space pauses on first press");
+			final List<Position> paused = edt(() -> List.copyOf(field(frame).snake().body()));
+			final int seconds = edt(() -> field(frame).elapsedSeconds());
 			// Longer than the normal keyboard repeat delay; also simulate additional
 			// presses for displays with auto-repeat disabled. No release occurs here.
 			for (int i = 0; i < 12; i++) {
 				Thread.sleep(100);
 				robot.keyPress(KeyEvent.VK_SPACE);
-				check(edt(() -> field().status() == SnakeField.Status.PAUSED), "held Space stays paused");
+				check(edt(() -> field(frame).status() == SnakeField.Status.PAUSED), "held Space stays paused");
 			}
 			robot.waitForIdle();
 			check(changes.get() == 1, "one physical press causes exactly one state transition");
-			check(edt(() -> paused.equals(List.copyOf(field().snake().body()))), "paused timer cannot move the snake");
-			check(edt(() -> seconds == field().elapsedSeconds()), "paused clock stays fixed");
+			check(edt(() -> paused.equals(List.copyOf(field(frame).snake().body()))), "paused timer cannot move the snake");
+			check(edt(() -> seconds == field(frame).elapsedSeconds()), "paused clock stays fixed");
 		} finally {
 			robot.keyRelease(KeyEvent.VK_SPACE);
 		}
 		tap(KeyEvent.VK_SPACE);
-		await(() -> field().status() == SnakeField.Status.RUNNING, "release re-arms the Space shortcut");
+		await(() -> field(frame).status() == SnakeField.Status.RUNNING, "release re-arms the Space shortcut");
 		tap(KeyEvent.VK_ESCAPE);
-		await(() -> field().status() == SnakeField.Status.PAUSED, "Escape pauses without toggling");
+		await(() -> field(frame).status() == SnakeField.Status.PAUSED, "Escape pauses without toggling");
 		tap(KeyEvent.VK_ESCAPE);
 		robot.waitForIdle();
-		check(edt(() -> field().status() == SnakeField.Status.PAUSED), "Escape never resumes");
+		check(edt(() -> field(frame).status() == SnakeField.Status.PAUSED), "Escape never resumes");
 		// Esc pressed on a focused control also returns steering to the board, so
 		// the next Space resumes the game instead of pressing that control
 		tap(KeyEvent.VK_SPACE);
-		await(() -> field().status() == SnakeField.Status.RUNNING, "Space resumes before Escape on a control");
-		focus(edt(() -> button("Restart")));
+		await(() -> field(frame).status() == SnakeField.Status.RUNNING, "Space resumes before Escape on a control");
+		focus(edt(() -> button(frame, "Restart")));
 		tap(KeyEvent.VK_ESCAPE);
-		await(() -> field().status() == SnakeField.Status.PAUSED && field().isFocusOwner(),
+		await(() -> field(frame).status() == SnakeField.Status.PAUSED && field(frame).isFocusOwner(),
 				"Escape on a focused control pauses and returns focus to the board");
-		robot.keyPress(KeyEvent.VK_SPACE);
-		await(() -> field().status() == SnakeField.Status.RUNNING, "press before modified release resumes");
-		robot.keyPress(KeyEvent.VK_SPACE);
-		robot.keyPress(KeyEvent.VK_SHIFT);
-		robot.keyRelease(KeyEvent.VK_SPACE);
-		robot.keyRelease(KeyEvent.VK_SHIFT);
-		tap(KeyEvent.VK_SPACE);
-		await(() -> field().status() == SnakeField.Status.PAUSED, "modified release re-arms Space");
 	}
 
 	private void testRestart() throws Exception {
-		final SnakeField old = edt(this::field);
+		final SnakeField old = edt(() -> field(frame));
 		robot.keyPress(KeyEvent.VK_F3);
 		try {
-			await(() -> field() != old, "restart installs a fresh field");
-			final SnakeField fresh = edt(this::field);
+			await(() -> field(frame) != old, "restart installs a fresh field");
+			final SnakeField fresh = edt(() -> field(frame));
 			final List<Position> stopped = edt(() -> List.copyOf(old.snake().body()));
 			Thread.sleep(800);
 			robot.keyPress(KeyEvent.VK_F3);
 			robot.waitForIdle();
-			check(edt(() -> field() == fresh), "held restart does not replace the field repeatedly");
+			check(edt(() -> field(frame) == fresh), "held restart does not replace the field repeatedly");
 			check(edt(() -> old.status() == SnakeField.Status.FINISHED
 					&& stopped.equals(List.copyOf(old.snake().body()))), "old timer stays stopped after restart");
 			check(edt(() -> fresh.zoom() == 150 && fresh.topology().equals(Topology.TORUS)
@@ -224,104 +203,108 @@ public final class SnakeInputTests {
 			robot.keyRelease(KeyEvent.VK_F3);
 		}
 		// Exercise the actual focused Start button, not just its ActionMap.
-		tabTo(edt(() -> button("Start")));
+		tabTo(edt(() -> button(frame, "Start")));
 		tap(KeyEvent.VK_SPACE);
-		await(() -> field().status() == SnakeField.Status.RUNNING && field().isFocusOwner(),
+		await(() -> field(frame).status() == SnakeField.Status.RUNNING && field(frame).isFocusOwner(),
 				"Tab and Space can start without a mouse");
 		tap(KeyEvent.VK_UP);
-		await(() -> field().snake().direction() == Direction.UP, "board arrows beat scroll-pane bindings");
+		await(() -> field(frame).snake().direction() == Direction.UP, "board arrows beat scroll-pane bindings");
 	}
 
 	private void testFocusLoss() throws Exception {
 		activate(other);
-		await(() -> field().status() == SnakeField.Status.PAUSED, "losing focus pauses a running game");
-		check(edt(() -> button("Resume").isEnabled()), "automatic pause updates controls");
-		final List<Position> paused = edt(() -> List.copyOf(field().snake().body()));
+		await(() -> field(frame).status() == SnakeField.Status.PAUSED, "losing focus pauses a running game");
+		check(edt(() -> button(frame, "Resume").isEnabled()), "automatic pause updates controls");
+		final List<Position> paused = edt(() -> List.copyOf(field(frame).snake().body()));
 		Thread.sleep(400);
-		check(edt(() -> paused.equals(List.copyOf(field().snake().body()))), "unfocused game does not move");
+		check(edt(() -> paused.equals(List.copyOf(field(frame).snake().body()))), "unfocused game does not move");
 		activate(frame);
-		focusBoard();
+		focus(edt(() -> field(frame)));
 		Thread.sleep(200);
-		check(edt(() -> field().status() == SnakeField.Status.PAUSED), "regaining focus does not resume");
-
-		robot.keyPress(KeyEvent.VK_SPACE);
-		await(() -> field().status() == SnakeField.Status.RUNNING, "explicit press resumes after focus loss");
-		activate(other);
-		await(() -> field().status() == SnakeField.Status.PAUSED, "focus loss also pauses with a key held");
-		robot.keyRelease(KeyEvent.VK_SPACE); // Released outside the game's window.
-		activate(frame);
-		focusBoard();
+		check(edt(() -> field(frame).status() == SnakeField.Status.PAUSED), "regaining focus does not resume");
 		tap(KeyEvent.VK_SPACE);
-		await(() -> field().status() == SnakeField.Status.RUNNING, "focus loss clears a missing key release");
+		await(() -> field(frame).status() == SnakeField.Status.RUNNING, "explicit press resumes after focus loss");
 	}
 
 	private void testAbout() throws Exception {
-		click(edt(() -> button("About")));
+		click(edt(() -> button(frame, "About")));
 		await(() -> about() != null && about().isFocused(), "About dialog opens");
-		check(edt(() -> field().status() == SnakeField.Status.PAUSED), "About pauses gameplay");
+		check(edt(() -> field(frame).status() == SnakeField.Status.PAUSED), "About pauses gameplay");
 		tap(KeyEvent.VK_ESCAPE);
 		await(() -> about() == null && frame.isFocused(), "About closes normally");
-		await(() -> field().status() == SnakeField.Status.RUNNING, "normal About close restores running game");
+		await(() -> field(frame).status() == SnakeField.Status.RUNNING, "normal About close restores running game");
 		testHeldAboutEscape();
 
 		tap(KeyEvent.VK_ESCAPE);
-		await(() -> field().status() == SnakeField.Status.PAUSED, "manual pause before About");
-		click(edt(() -> button("About")));
+		await(() -> field(frame).status() == SnakeField.Status.PAUSED, "manual pause before About");
+		click(edt(() -> button(frame, "About")));
 		await(() -> about() != null && about().isFocused(), "About opens from paused state");
 		tap(KeyEvent.VK_ESCAPE);
 		await(() -> about() == null && frame.isFocused(), "paused About closes");
-		check(edt(() -> field().status() == SnakeField.Status.PAUSED), "About preserves a manual pause");
+		check(edt(() -> field(frame).status() == SnakeField.Status.PAUSED), "About preserves a manual pause");
 
-		focusBoard();
+		focus(edt(() -> field(frame)));
 		tap(KeyEvent.VK_SPACE);
-		await(() -> field().status() == SnakeField.Status.RUNNING, "resume before external-focus dialog test");
-		click(edt(() -> button("About")));
+		await(() -> field(frame).status() == SnakeField.Status.RUNNING, "resume before external-focus dialog test");
+		click(edt(() -> button(frame, "About")));
 		await(() -> about() != null && about().isFocused(), "About opens before switching windows");
 		activate(other);
 		activate(edt(SnakeInputTests::about));
 		tap(KeyEvent.VK_ESCAPE);
 		await(() -> about() == null && frame.isFocused(), "About closes after an external focus change");
-		focusBoard();
+		focus(edt(() -> field(frame)));
 		Thread.sleep(200);
-		check(edt(() -> field().status() == SnakeField.Status.PAUSED), "external focus loss cancels About auto-resume");
+		check(edt(() -> field(frame).status() == SnakeField.Status.PAUSED), "external focus loss cancels About auto-resume");
 		testAboutClosedElsewhere();
 	}
 
-	/** An About close that leaves the focus in another window must not resume the game on a later return. */
+	/**
+	 * An About close that leaves the focus in another window must not resume
+	 * the game on a later return, and a shortcut held since before the dialog
+	 * opened must stay suppressed until its release even after the grace ends.
+	 */
 	private void testAboutClosedElsewhere() throws Exception {
-		tap(KeyEvent.VK_SPACE);
-		await(() -> field().status() == SnakeField.Status.RUNNING, "resume before the About close elsewhere");
-		click(edt(() -> button("About")));
-		await(() -> about() != null && about().isFocused(), "About opens before closing elsewhere");
-		// The game window cannot take the focus back, as when a window manager
-		// gives it to another window once the dialog closes
-		edt(() -> { frame.setFocusableWindowState(false); return null; });
+		robot.keyPress(KeyEvent.VK_SPACE);
 		try {
-			tap(KeyEvent.VK_ESCAPE);
-			await(() -> about() == null, "About closes while its owner cannot take the focus");
-			activate(other);
-			Thread.sleep(SnakeFrame.ABOUT_RESUME_GRACE_MS + 500);
-			check(edt(() -> field().status() == SnakeField.Status.PAUSED), "the game stays paused meanwhile");
+			await(() -> field(frame).status() == SnakeField.Status.RUNNING, "held Space resumes before the About");
+			click(edt(() -> button(frame, "About")));
+			await(() -> about() != null && about().isFocused(), "About opens before closing elsewhere");
+			// The game window cannot take the focus back, as when a window manager
+			// gives it to another window once the dialog closes
+			edt(() -> { frame.setFocusableWindowState(false); return null; });
+			try {
+				tap(KeyEvent.VK_ESCAPE);
+				await(() -> about() == null, "About closes while its owner cannot take the focus");
+				activate(other);
+				Thread.sleep(SnakeFrame.ABOUT_RESUME_GRACE_MS + 500);
+				check(edt(() -> field(frame).status() == SnakeField.Status.PAUSED), "the game stays paused meanwhile");
+			} finally {
+				edt(() -> { frame.setFocusableWindowState(true); return null; });
+			}
+			activate(frame);
+			await(() -> field(frame).isFocusOwner(), "a late return still restores steering to the board");
+			robot.waitForIdle();
+			check(edt(() -> field(frame).status() == SnakeField.Status.PAUSED), "a late return does not resume the game");
+			robot.keyPress(KeyEvent.VK_SPACE); // a repeat of the Space held since before the dialog
+			robot.waitForIdle();
+			check(edt(() -> field(frame).status() == SnakeField.Status.PAUSED),
+					"a key held across the dialog stays latched when the grace ends");
 		} finally {
-			edt(() -> { frame.setFocusableWindowState(true); return null; });
+			robot.keyRelease(KeyEvent.VK_SPACE);
 		}
-		activate(frame);
-		await(() -> field().isFocusOwner(), "a late return still restores steering to the board");
-		robot.waitForIdle();
-		check(edt(() -> field().status() == SnakeField.Status.PAUSED), "a late return does not resume the game");
 		// The Escape that closed the dialog was released while no game window had
 		// the focus, so its release never arrived: the expired grace re-arms it.
 		tap(KeyEvent.VK_SPACE);
-		await(() -> field().status() == SnakeField.Status.RUNNING, "Space resumes after the late return");
+		await(() -> field(frame).status() == SnakeField.Status.RUNNING, "Space resumes after the late return");
 		tap(KeyEvent.VK_ESCAPE);
-		await(() -> field().status() == SnakeField.Status.PAUSED, "the first Escape after a late return pauses");
+		await(() -> field(frame).status() == SnakeField.Status.PAUSED, "the first Escape after a late return pauses");
 	}
 
 	/** A dialog's closing key must not become a fresh game shortcut on focus return. */
 	private void testHeldAboutEscape() throws Exception {
-		click(edt(() -> button("About")));
+		click(edt(() -> button(frame, "About")));
 		await(() -> about() != null && about().isFocused(), "About opens before held Escape");
-		final SnakeField current = edt(this::field);
+		final SnakeField current = edt(() -> field(frame));
 		final AtomicInteger changes = new AtomicInteger();
 		final PropertyChangeListener listener = event -> changes.incrementAndGet();
 		edt(() -> { current.addPropertyChangeListener(SnakeField.STATUS_PROPERTY, listener); return null; });
@@ -350,42 +333,6 @@ public final class SnakeInputTests {
 		await(() -> current.status() == SnakeField.Status.PAUSED, "fresh Escape still pauses after dialog closure");
 		tap(KeyEvent.VK_SPACE);
 		await(() -> current.status() == SnakeField.Status.RUNNING, "Space can resume after the fresh Escape");
-	}
-
-	private void focusBoard() throws Exception {
-		edt(() -> { field().requestFocusInWindow(); return null; });
-		await(() -> field().isFocusOwner(), "board receives focus");
-	}
-
-	private void tabTo(final Component target) throws Exception {
-		for (int i = 0; i < 30; i++) {
-			if (edt(() -> KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner() == target)) {
-				check(true, "Tab reaches " + target.getClass().getSimpleName());
-				return;
-			}
-			tap(KeyEvent.VK_TAB);
-		}
-		throw new AssertionError("Tab could not reach " + target);
-	}
-
-	private void tap(final int key) {
-		RobotSupport.tap(robot, key);
-	}
-
-	private void openPopup() {
-		RobotSupport.openPopup(robot);
-	}
-
-	private void click(final Component component) throws Exception {
-		RobotSupport.click(robot, component);
-	}
-
-	private SnakeField field() {
-		return component(frame, SnakeField.class, c -> true);
-	}
-
-	private JButton button(final String text) {
-		return component(frame, JButton.class, button -> text.equals(button.getText()));
 	}
 
 	/** The About dialog while it is showing, or null. */

@@ -39,7 +39,7 @@ import snake.topology.Topology;
 
 /** Main application window and entry point. */
 public final class SnakeFrame {
-	private static final String VERSION = "0.6.2";
+	private static final String VERSION = "0.6.3";
 	private static final String ABOUT_TEXT = "Snake " + VERSION + " by CGH.";
 	/** How long a closed About dialog waits for the window to regain focus before it cancels the resume. */
 	static final int ABOUT_RESUME_GRACE_MS = 2000;
@@ -214,8 +214,6 @@ public final class SnakeFrame {
 			if (field.status() == SnakeField.Status.RUNNING && !(EventQueue.getCurrentEvent() instanceof KeyEvent))
 				field.requestFocusInWindow();
 		});
-		// Keep the normal focus/Tab behaviour. Focused settings handle their own
-		// arrows; starting, pausing and restarting return steering to the board.
 	}
 
 	private void configureLayout() {
@@ -388,12 +386,13 @@ public final class SnakeFrame {
 			// The window manager may give the focus to another window instead.
 			// Returning later must then not resume, as after any focus loss. The
 			// key that closed the dialog was released over that other window, so
-			// its release will never arrive: without one it would stay latched.
+			// its release will never arrive: without one it would stay latched. A
+			// key held since before the dialog opened stays latched until released.
 			if (afterAboutFocus == pending) {
 				final Timer expiry = new Timer(ABOUT_RESUME_GRACE_MS, event -> {
 					resumeCancelled[0] = true;
 					if (afterAboutFocus == pending)
-						shortcuts.releaseAll();
+						shortcuts.releaseUnlatched();
 				});
 				expiry.setRepeats(false);
 				expiry.start();

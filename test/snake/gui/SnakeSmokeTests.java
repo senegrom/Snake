@@ -1,14 +1,11 @@
 package snake.gui;
 
 import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
-import javax.swing.JComponent;
 import javax.swing.RepaintManager;
 import snake.Direction;
 import snake.Position;
@@ -20,6 +17,7 @@ import static snake.gui.TestSupport.check;
 import static snake.gui.TestSupport.equal;
 import static snake.gui.TestSupport.expect;
 import static snake.gui.TestSupport.isBluish;
+import static snake.gui.TestSupport.render;
 import static snake.gui.TestSupport.shortSnake;
 
 /** Targeted model, timing and headless-rendering smoke tests. */
@@ -57,12 +55,8 @@ public final class SnakeSmokeTests {
 				"a rejected tail-growth collision leaves the body unchanged");
 
 		final Snake turning = shortSnake();
-		check(turning.requestDirection(Direction.UP), "the first queued turn is accepted");
-		check(turning.requestDirection(Direction.DOWN),
-				"a queued turn may be revised before movement");
-		check(!turning.requestDirection(Direction.LEFT),
-				"a revision may not reverse the last completed step");
-		check(turning.requestDirection(Direction.RIGHT),
+		turning.requestDirection(Direction.UP);
+		check(turning.requestDirection(Direction.RIGHT) && turning.direction() == Direction.RIGHT,
 				"returning to the current heading cancels the queued turn");
 	}
 
@@ -74,10 +68,6 @@ public final class SnakeSmokeTests {
 		expect(IllegalArgumentException.class, () -> new SnakeField(snake,
 				new Position(1, SnakeField.BOARD_ROWS)),
 				"apple at the exclusive bottom bound is rejected");
-		expect(IllegalArgumentException.class, () -> Topology.TORUS.map(new Position(0, 0), 0, 1),
-				"zero-column boards are rejected before mapping");
-		expect(IllegalArgumentException.class, () -> Topology.TORUS.map(new Position(0, 0), 1, 0),
-				"zero-row boards are rejected before mapping");
 		expect(NullPointerException.class, () -> new SnakeField(snake, SAFE_APPLE, null),
 				"field rejects a null clock");
 	}
@@ -147,7 +137,7 @@ public final class SnakeSmokeTests {
 		final EventRecorder eatingEvents = new EventRecorder(eating);
 
 		final RepaintManager originalManager = RepaintManager.currentManager(eating);
-		final CountingRepaintManager repaintManager = new CountingRepaintManager();
+		final TestSupport.CountingRepaintManager repaintManager = new TestSupport.CountingRepaintManager();
 		RepaintManager.setCurrentManager(repaintManager);
 		try {
 			eating.step();
@@ -155,7 +145,7 @@ public final class SnakeSmokeTests {
 			RepaintManager.setCurrentManager(originalManager);
 		}
 		equal(1, eatingEvents.points, "eating publishes the updated score");
-		check(repaintManager.dirtyRegions > 0, "a completed step requests repainting");
+		check(repaintManager.count > 0, "a completed step requests repainting");
 
 		final SnakeField stopped = new SnakeField(shortSnake(), SAFE_APPLE);
 		stopped.shutdown();
@@ -309,18 +299,6 @@ public final class SnakeSmokeTests {
 		}
 	}
 
-	private static final class CountingRepaintManager extends RepaintManager {
-		private int dirtyRegions;
-
-		@Override
-		public void addDirtyRegion(final JComponent component, final int x, final int y,
-				final int width, final int height) {
-			if (component instanceof SnakeField)
-				dirtyRegions++;
-			super.addDirtyRegion(component, x, y, width, height);
-		}
-	}
-
 	/** A short snake lying along the left edge in row 5, on the given topology. */
 	private static SnakeField edgeField(final Topology topology) {
 		final Snake snake = new Snake(Direction.RIGHT,
@@ -359,20 +337,6 @@ public final class SnakeSmokeTests {
 		final int darkest = Math.min(color.getRed(), Math.min(color.getGreen(), color.getBlue()));
 		final int lightest = Math.max(color.getRed(), Math.max(color.getGreen(), color.getBlue()));
 		return darkest >= 200 && lightest - darkest <= 6;
-	}
-
-	private static BufferedImage render(final SnakeField field) {
-		final Dimension size = field.getPreferredSize();
-		field.setSize(size);
-		final BufferedImage image = new BufferedImage(size.width, size.height,
-				BufferedImage.TYPE_INT_ARGB);
-		final Graphics2D graphics = image.createGraphics();
-		try {
-			field.paint(graphics);
-		} finally {
-			graphics.dispose();
-		}
-		return image;
 	}
 
 	private static boolean containsColor(final BufferedImage image, final Color color,

@@ -1,7 +1,7 @@
 package snake.gui;
 
-import java.awt.Container;
 import java.awt.EventQueue;
+import java.awt.Frame;
 import java.awt.KeyboardFocusManager;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
@@ -23,9 +23,12 @@ import javax.swing.KeyStroke;
 import snake.Direction;
 import snake.Position;
 import snake.topology.Topology;
+import static snake.gui.TestSupport.button;
 import static snake.gui.TestSupport.check;
+import static snake.gui.TestSupport.combo;
 import static snake.gui.TestSupport.component;
 import static snake.gui.TestSupport.equal;
+import static snake.gui.TestSupport.field;
 import static snake.gui.TestSupport.find;
 
 /** End-to-end smoke tests for the real Swing window under a virtual display. */
@@ -39,8 +42,7 @@ public final class SnakeGuiTests {
 	}
 
 	private static void run() {
-		final JFrame originalFrame = visibleSnakeFrame();
-		check(originalFrame.isVisible(), "main window is visible");
+		final JFrame originalFrame = Objects.requireNonNull(RobotSupport.gameFrame(), "No visible Snake window");
 		check(!originalFrame.isResizable(), "main window is fixed-size");
 		equal("Snake", originalFrame.getTitle(), "main window title");
 
@@ -48,8 +50,8 @@ public final class SnakeGuiTests {
 		final JButton pause = button(originalFrame, "Pause");
 		final JButton restart = button(originalFrame, "Restart");
 		final JSlider speed = component(originalFrame, JSlider.class, ignored -> true);
-		final JComboBox<?> topology = component(originalFrame, JComboBox.class, ignored -> true);
-		final SnakeField field = component(originalFrame, SnakeField.class, ignored -> true);
+		final JComboBox<?> topology = combo(originalFrame, "topology");
+		final SnakeField field = field(originalFrame);
 		final JToggleButton settings = component(originalFrame, JToggleButton.class,
 				toggle -> "settings".equals(toggle.getName()));
 
@@ -106,8 +108,9 @@ public final class SnakeGuiTests {
 
 		restart.doClick(0);
 		check(originalFrame.isDisplayable() && originalFrame.isVisible(), "restart keeps the window open");
-		check(visibleSnakeFrame() == originalFrame, "restart does not open a second window");
-		final SnakeField restartedField = component(originalFrame, SnakeField.class, ignored -> true);
+		check(Arrays.stream(Frame.getFrames()).filter(frame -> frame.isVisible() && "Snake".equals(frame.getTitle()))
+				.count() == 1, "restart does not open a second window");
+		final SnakeField restartedField = field(originalFrame);
 		check(restartedField != field, "restart installs a fresh field");
 		equal(SnakeField.Status.READY, restartedField.status(), "restarted field is ready");
 		check(start.isEnabled(), "restarted window can start");
@@ -133,7 +136,7 @@ public final class SnakeGuiTests {
 		// Restarting a live game must stop the old field, not merely replace it
 		final List<Position> liveBody = List.copyOf(restartedField.snake().body());
 		restart.doClick(0);
-		final SnakeField freshField = component(originalFrame, SnakeField.class, ignored -> true);
+		final SnakeField freshField = field(originalFrame);
 		check(freshField != restartedField, "restarting a running game installs a fresh field");
 		equal(SnakeField.Status.FINISHED, restartedField.status(), "restart shuts the running field down");
 		restartedField.onTimerTick();
@@ -205,13 +208,5 @@ public final class SnakeGuiTests {
 	private static void releaseKey(final JFrame frame, final int keyCode, final int modifiers) {
 		KeyboardFocusManager.getCurrentKeyboardFocusManager().dispatchEvent(new KeyEvent(frame,
 				KeyEvent.KEY_RELEASED, System.currentTimeMillis(), modifiers, keyCode, KeyEvent.CHAR_UNDEFINED));
-	}
-
-	private static JFrame visibleSnakeFrame() {
-		return Objects.requireNonNull(RobotSupport.gameFrame(), "No visible Snake window");
-	}
-
-	private static JButton button(final Container root, final String text) {
-		return component(root, JButton.class, button -> text.equals(button.getText()));
 	}
 }

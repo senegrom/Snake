@@ -3,12 +3,18 @@ package snake.gui;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Predicate;
+import javax.swing.JButton;
+import javax.swing.JComboBox;
+import javax.swing.JComponent;
+import javax.swing.RepaintManager;
 import javax.swing.SwingUtilities;
 import snake.Direction;
 import snake.Position;
@@ -75,6 +81,44 @@ final class TestSupport {
 		if (found == null)
 			throw new AssertionError("Missing component: " + type.getSimpleName());
 		return found;
+	}
+
+	/** The window's current board. */
+	static SnakeField field(final Container window) {
+		return component(window, SnakeField.class, ignored -> true);
+	}
+
+	static JButton button(final Container window, final String text) {
+		return component(window, JButton.class, button -> text.equals(button.getText()));
+	}
+
+	static JComboBox<?> combo(final Container window, final String name) {
+		return component(window, JComboBox.class, combo -> name.equals(combo.getName()));
+	}
+
+	/** Paints the field at its preferred size into a new image. */
+	static BufferedImage render(final SnakeField field) {
+		field.setSize(field.getPreferredSize());
+		final BufferedImage image = new BufferedImage(field.getWidth(), field.getHeight(), BufferedImage.TYPE_INT_RGB);
+		final Graphics2D graphics = image.createGraphics();
+		try {
+			field.paint(graphics);
+		} finally {
+			graphics.dispose();
+		}
+		return image;
+	}
+
+	/** Counts the repaint requests of every board instead of scheduling them. */
+	static final class CountingRepaintManager extends RepaintManager {
+		int count;
+
+		@Override
+		public void addDirtyRegion(final JComponent component, final int x, final int y,
+				final int width, final int height) {
+			if (component instanceof SnakeField)
+				count++;
+		}
 	}
 
 	/** Runs the suite body on the EDT, prints the summary and returns the process exit code. */
