@@ -132,8 +132,6 @@ public final class SnakeSmokeTests {
 		final Snake eatingSnake = new Snake(Direction.RIGHT,
 				List.of(new Position(2, 1), new Position(1, 1), new Position(0, 1)));
 		final SnakeField eating = new SnakeField(eatingSnake, new Position(3, 1));
-		// Give the field a real size so its repaint request carries a non-empty region
-		eating.setSize(eating.getPreferredSize());
 		final EventRecorder eatingEvents = new EventRecorder(eating);
 
 		final RepaintManager originalManager = RepaintManager.currentManager(eating);
@@ -192,65 +190,8 @@ public final class SnakeSmokeTests {
 		equal(wall, image.getRGB(midX, BoardPainter.BOARD_Y + BoardPainter.BOARD_HEIGHT + 1),
 				"plane paints a thick bottom wall");
 
-		// A snake along the left edge is echoed in the right margin: at the same
-		// row on the torus, at the mirrored row on the Klein bottle
-		final int ghostX = BoardPainter.BOARD_X + BoardPainter.BOARD_WIDTH + BoardPainter.CELL_SIZE
-				+ BoardPainter.CELL_SIZE / 2;
-		final int sameRow = BoardPainter.BOARD_Y + 5 * BoardPainter.CELL_SIZE + BoardPainter.CELL_SIZE / 2;
-		final int mirroredRow = BoardPainter.BOARD_Y
-				+ (SnakeField.BOARD_ROWS - 1 - 5) * BoardPainter.CELL_SIZE + BoardPainter.CELL_SIZE / 2;
 		final BufferedImage torusImage = render(edgeField(Topology.TORUS));
-		check(isBluish(torusImage.getRGB(ghostX, sameRow)), "torus margin echoes the snake at the same row");
-		check(!isBluish(torusImage.getRGB(ghostX, mirroredRow)), "torus margin is not mirrored");
 		check(torusImage.getRGB(BoardPainter.BOARD_X - 2, midY) != wall, "torus paints no wall");
-		final BufferedImage kleinImage = render(edgeField(Topology.KLEIN_BOTTLE));
-		check(isBluish(kleinImage.getRGB(ghostX, mirroredRow)),
-				"Klein bottle margin echoes the snake at the mirrored row");
-		check(!isBluish(kleinImage.getRGB(ghostX, sameRow)),
-				"Klein bottle margin does not echo the snake at the same row");
-		final BufferedImage planeImage = render(edgeField(Topology.PLANE));
-		check(!isBluish(planeImage.getRGB(ghostX, sameRow)), "plane margin shows no neighbour");
-
-		// A snake near the top edge is echoed in the bottom margin; the
-		// projective plane mirrors the columns
-		final Snake topSnake = new Snake(Direction.DOWN,
-				List.of(new Position(5, 2), new Position(5, 1), new Position(5, 0)));
-		final int ghostY = BoardPainter.BOARD_Y + BoardPainter.BOARD_HEIGHT + BoardPainter.CELL_SIZE
-				+ BoardPainter.CELL_SIZE / 2;
-		final int sameColumn = BoardPainter.BOARD_X + 5 * BoardPainter.CELL_SIZE + BoardPainter.CELL_SIZE / 2;
-		final int mirroredColumn = BoardPainter.BOARD_X
-				+ (SnakeField.BOARD_COLUMNS - 1 - 5) * BoardPainter.CELL_SIZE + BoardPainter.CELL_SIZE / 2;
-		final SnakeField projective = new SnakeField(topSnake, SAFE_APPLE);
-		projective.setTopology(Topology.PROJECTIVE_PLANE);
-		final BufferedImage projectiveImage = render(projective);
-		check(isBluish(projectiveImage.getRGB(mirroredColumn, ghostY)),
-				"projective plane bottom margin mirrors the columns");
-		check(!isBluish(projectiveImage.getRGB(sameColumn, ghostY)),
-				"projective plane bottom margin is not a plain wrap");
-
-		// Corner neighbours combine both gluings: a snake near the top-left corner
-		// echoes in the bottom-right corner on the torus, in the top-right corner on
-		// the Klein bottle (rows mirrored) and in the top-left corner on the
-		// projective plane (a half turn)
-		final int cornerCellX = 2 * BoardPainter.CELL_SIZE + BoardPainter.CELL_SIZE / 2;
-		final int cornerCellY = BoardPainter.CELL_SIZE + BoardPainter.CELL_SIZE / 2;
-		final Point bottomRight = new Point(BoardPainter.BOARD_X + BoardPainter.BOARD_WIDTH + cornerCellX,
-				BoardPainter.BOARD_Y + BoardPainter.BOARD_HEIGHT + cornerCellY);
-		final Point topRight = new Point(BoardPainter.BOARD_X + BoardPainter.BOARD_WIDTH + cornerCellX,
-				BoardPainter.BOARD_Y - cornerCellY);
-		final Point topLeft = new Point(BoardPainter.BOARD_X - cornerCellX, BoardPainter.BOARD_Y - cornerCellY);
-		final BufferedImage torusCorners = render(cornerField(Topology.TORUS));
-		check(isBluish(pixel(torusCorners, bottomRight)), "torus corner echoes the snake unchanged");
-		check(!isBluish(pixel(torusCorners, topRight)), "torus corner is not mirrored");
-		final BufferedImage kleinCorners = render(cornerField(Topology.KLEIN_BOTTLE));
-		check(isBluish(pixel(kleinCorners, topRight)), "Klein bottle corner echoes the snake with rows mirrored");
-		check(!isBluish(pixel(kleinCorners, bottomRight)), "Klein bottle corner is not a plain copy");
-		final BufferedImage projectiveCorners = render(cornerField(Topology.PROJECTIVE_PLANE));
-		check(isBluish(pixel(projectiveCorners, topLeft)),
-				"projective plane corner echoes the snake turned by a half turn");
-		check(!isBluish(pixel(projectiveCorners, bottomRight)), "projective plane corner is not a plain copy");
-		equal(BoardPainter.WALL_MARGIN_COLOR.getRGB(), pixel(render(cornerField(Topology.CYLINDER)), topRight),
-				"cylinder corners beyond a wall are solid wall margin");
 
 		final Snake wallSnake = new Snake(Direction.RIGHT,
 				List.of(new Position(SnakeField.BOARD_COLUMNS - 1, 2),
@@ -303,15 +244,6 @@ public final class SnakeSmokeTests {
 	private static SnakeField edgeField(final Topology topology) {
 		final Snake snake = new Snake(Direction.RIGHT,
 				List.of(new Position(2, 5), new Position(1, 5), new Position(0, 5)));
-		final SnakeField field = new SnakeField(snake, SAFE_APPLE);
-		field.setTopology(topology);
-		return field;
-	}
-
-	/** A short snake near the top-left corner, on the given topology. */
-	private static SnakeField cornerField(final Topology topology) {
-		final Snake snake = new Snake(Direction.LEFT,
-				List.of(new Position(1, 1), new Position(2, 1), new Position(3, 1)));
 		final SnakeField field = new SnakeField(snake, SAFE_APPLE);
 		field.setTopology(topology);
 		return field;

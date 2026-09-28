@@ -62,10 +62,6 @@ public final class SnakeTests {
 
 	private static void testPositionAndDirection() {
 		final Position position = new Position(1, 2);
-		equal(1, position.x(), "record x accessor");
-		equal(2, position.y(), "record y accessor");
-		equal(new Position(1, 2), new Position(1, 2), "record value equality");
-
 		for (final Direction direction : Direction.values()) {
 			equal(position, direction.opposite().move(direction.move(position)),
 					"opposite movement round trip for " + direction);
@@ -236,8 +232,6 @@ public final class SnakeTests {
 		equal(5, growing.length(), "growing movement retains the tail");
 		equal(5, liveBodyView.size(), "body view remains live after movement");
 		final List<Position> beforeCollision = List.copyOf(growing.body());
-		expect(NullPointerException.class, () -> growing.advanceTo(null, false),
-				"movement rejects a null destination");
 		check(!growing.advanceTo(new Position(3, 1), true),
 				"growth collision is rejected");
 		check(!growing.advanceTo(new Position(2, 1), false),

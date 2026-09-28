@@ -182,10 +182,7 @@ final class SnakeField extends JPanel implements Scrollable {
 	}
 
 	void shutdown() {
-		if (status == Status.RUNNING)
-			captureElapsedTime();
-		moveTimer.stop();
-		setStatus(Status.FINISHED);
+		endGame();
 	}
 
 	/** Performs exactly one deterministic game step for the timer and tests. */
@@ -375,9 +372,8 @@ final class SnakeField extends JPanel implements Scrollable {
 		if (status == Status.RUNNING)
 			captureElapsedTime();
 		moveTimer.stop();
-		setStatus(Status.FINISHED);
+		setStatus(Status.FINISHED); // repaints when the status changes
 		updateElapsedDisplay();
-		repaint();
 	}
 
 	private long elapsedNanos() {

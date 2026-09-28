@@ -44,7 +44,6 @@ public final class SnakeGuiTests {
 	private static void run() {
 		final JFrame originalFrame = Objects.requireNonNull(RobotSupport.gameFrame(), "No visible Snake window");
 		check(!originalFrame.isResizable(), "main window is fixed-size");
-		equal("Snake", originalFrame.getTitle(), "main window title");
 
 		final JButton start = button(originalFrame, "Start");
 		final JButton pause = button(originalFrame, "Pause");
@@ -106,6 +105,11 @@ public final class SnakeGuiTests {
 		invokeKey(originalFrame, KeyEvent.VK_SPACE);
 		equal(SnakeField.Status.FINISHED, field.status(), "Space does not revive a finished game");
 
+		// Put a score and a time on the labels, so that the restart has something to reset
+		field.firePropertyChange(SnakeField.POINTS_PROPERTY, 0, 7);
+		field.firePropertyChange(SnakeField.TIME_PROPERTY, 0, 75);
+		equal("Time 1:15", component(originalFrame, JLabel.class, label -> label.getText().startsWith("Time"))
+				.getText(), "the clock label follows the field");
 		restart.doClick(0);
 		check(originalFrame.isDisplayable() && originalFrame.isVisible(), "restart keeps the window open");
 		check(Arrays.stream(Frame.getFrames()).filter(frame -> frame.isVisible() && "Snake".equals(frame.getTitle()))

@@ -234,6 +234,7 @@ public final class SnakeInputTests {
 		await(() -> about() == null && frame.isFocused(), "About closes normally");
 		await(() -> field(frame).status() == SnakeField.Status.RUNNING, "normal About close restores running game");
 		testHeldAboutEscape();
+		testHeldKeyStaysOutOfAbout();
 
 		tap(KeyEvent.VK_ESCAPE);
 		await(() -> field(frame).status() == SnakeField.Status.PAUSED, "manual pause before About");
@@ -333,6 +334,35 @@ public final class SnakeInputTests {
 		await(() -> current.status() == SnakeField.Status.PAUSED, "fresh Escape still pauses after dialog closure");
 		tap(KeyEvent.VK_SPACE);
 		await(() -> current.status() == SnakeField.Status.RUNNING, "Space can resume after the fresh Escape");
+	}
+
+	/**
+	 * A key held since before the About dialog opened stays out of it: its
+	 * repeats armed the dialog's focused button and its release closed the
+	 * dialog, so one Space press paused the game and dismissed the About.
+	 */
+	private void testHeldKeyStaysOutOfAbout() throws Exception {
+		final SnakeField current = edt(() -> field(frame));
+		robot.keyPress(KeyEvent.VK_SPACE);
+		try {
+			await(() -> current.status() == SnakeField.Status.PAUSED, "held Space pauses before the About");
+			click(edt(() -> button(frame, "About")));
+			await(() -> about() != null && about().isFocused(), "About opens while Space is held");
+			Thread.sleep(800); // native auto-repeat where it is enabled
+			for (int i = 0; i < 3; i++)
+				robot.keyPress(KeyEvent.VK_SPACE); // and repeats where it is not
+			robot.waitForIdle();
+		} finally {
+			robot.keyRelease(KeyEvent.VK_SPACE);
+		}
+		robot.waitForIdle();
+		Thread.sleep(200);
+		check(edt(() -> about() != null), "a key held since before the About cannot close it");
+		tap(KeyEvent.VK_ESCAPE);
+		await(() -> about() == null && frame.isFocused(), "a fresh Escape still closes the About");
+		check(edt(() -> current.status() == SnakeField.Status.PAUSED), "the About keeps the Space pause");
+		tap(KeyEvent.VK_SPACE);
+		await(() -> current.status() == SnakeField.Status.RUNNING, "Space resumes after the About");
 	}
 
 	/** The About dialog while it is showing, or null. */

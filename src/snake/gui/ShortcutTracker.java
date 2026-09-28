@@ -19,10 +19,11 @@ import javax.swing.KeyStroke;
  * still held cannot act again; if the outside release was never delivered,
  * one tap clears the latch. Presses in owned dialogs are also tracked so
  * their closing key cannot become a game shortcut after focus returns.
- * Releases are tracked in every application window, but presses are only
- * suppressed while the game window is focused. Repeated presses are stopped
- * before they reach a different focused control; a fresh control press still
- * receives its normal release.
+ * Releases are tracked in every application window. Presses are suppressed
+ * while the game window is focused, and in owned dialogs only for a key
+ * latched by the focus loss, so a key held while a dialog opens cannot act
+ * in it. Repeated presses are stopped before they reach a different focused
+ * control; a fresh control press still receives its normal release.
  */
 final class ShortcutTracker {
 	private final Window window;
@@ -51,8 +52,10 @@ final class ShortcutTracker {
 			// even if the original press was handled by a button instead of our action.
 			final boolean repeated = shortcut.keyDown;
 			shortcut.keyDown = true;
-			// Owned dialogs keep their native key handling, including the initial close.
-			if (window.isFocused() && (repeated || shortcut.blockedUntilRelease)) {
+			// Owned dialogs keep their native key handling, including the initial close,
+			// but not a key held since before they took the focus: its repeats would
+			// arm the dialog's focused button and its release fire it.
+			if (shortcut.blockedUntilRelease || window.isFocused() && repeated) {
 				event.consume();
 				return true;
 			}
@@ -78,10 +81,9 @@ final class ShortcutTracker {
 		KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(dispatcher);
 	}
 
-	/** Stops observing key events and re-arms every shortcut. */
+	/** Stops observing key events. */
 	void uninstall() {
 		KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(dispatcher);
-		releaseAll();
 	}
 
 	/** Binds a key to an action that fires once per physical press. */
@@ -96,10 +98,6 @@ final class ShortcutTracker {
 	/** Focus loss is not a key release: auto-repeat may continue when focus returns. */
 	void focusLost() {
 		shortcuts.values().forEach(HeldKeyAction::focusLost);
-	}
-
-	void releaseAll() {
-		shortcuts.values().forEach(HeldKeyAction::release);
 	}
 
 	/**

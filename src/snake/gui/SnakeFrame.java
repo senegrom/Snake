@@ -39,7 +39,7 @@ import snake.topology.Topology;
 
 /** Main application window and entry point. */
 public final class SnakeFrame {
-	private static final String VERSION = "0.6.3";
+	private static final String VERSION = "0.6.4";
 	private static final String ABOUT_TEXT = "Snake " + VERSION + " by CGH.";
 	/** How long a closed About dialog waits for the window to regain focus before it cancels the resume. */
 	static final int ABOUT_RESUME_GRACE_MS = 2000;
